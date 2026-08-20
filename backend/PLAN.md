@@ -1,7 +1,5 @@
 # Plano de Implementação: LookBuy Backend
 
-> **Instrução para o Agente:** Execute uma tarefa por vez. Valide a tarefa com testes antes de marcar como concluída.
-
 ---
 
 ## Fase 1: Setup do Ambiente e Schemas do Protocolo WS
