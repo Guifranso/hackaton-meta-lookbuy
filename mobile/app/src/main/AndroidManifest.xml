@@ -2,7 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Permissões exigidas pelo Meta DAT SDK e MDK -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- CAMERA é opcional pois o hardware físico (óculos) pode substituir -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
+        android:name=".LookBuyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -12,6 +23,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LookBuy"
         tools:targetApi="31">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,10 +31,42 @@
             android:theme="@style/Theme.LookBuy">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+                Obrigatório pelo Meta DAT SDK (Regra #3 da Arquitetura):
+                O app Meta AI usa esse URI scheme para devolver o usuário ao app
+                após o fluxo de registro/autenticação.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lookbuy" />
+            </intent-filter>
         </activity>
+
+        <!--
+            Credenciais do Developer Portal Meta AI.
+            Em modo Developer (DAT v0.8.0), valores "0" são aceitos.
+            Substituir pelos valores reais ao gerar um build de produção.
+        -->
+        <meta-data
+            android:name="com.meta.wearables.APPLICATION_ID"
+            android:value="0" />
+        <meta-data
+            android:name="com.meta.wearables.CLIENT_TOKEN"
+            android:value="0" />
+
+        <!-- Credenciais configuráveis por flavors/build types via manifestPlaceholders -->
+        <meta-data
+            android:name="com.meta.wearable.mwdat.APPLICATION_ID"
+            android:value="${mwdat_application_id}" />
+        <meta-data
+            android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
+            android:value="${mwdat_client_token}" />
+
     </application>
 
 </manifest>

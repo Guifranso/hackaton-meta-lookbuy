@@ -1,111 +1,206 @@
-# Arquitetura do Sistema e Guia de Implementação: LookBuy
+# Arquitetura do Sistema e Guia de Implementação: LookBuy (Client-Server)
 
-Este documento serve como o **Plano de Arquitetura e Contexto Base** para o desenvolvimento do **LookBuy**, um verificador e comparador inteligente de preços *mãos-livres* [cite: 2]. O projeto integra-se aos óculos Ray-Ban Meta através do *Meta Wearables Device Access Toolkit (DAT)* [cite: 3].
+Este documento serve como o **Plano de Arquitetura e Contexto Base** para o desenvolvimento do **LookBuy**, um verificador e comparador inteligente de preços *mãos-livres* [cite: 2]. O projeto integra-se aos óculos Ray-Ban Meta através do *Meta Wearables Device Access Toolkit (DAT)* [cite: 3] e utiliza uma arquitetura híbrida (Edge AI + Nuvem) para processamento [cite: 1].
 
 ## 1. Visão Geral (Fluxograma)
 
 ```mermaid
-flowchart TD
-    Start([Início / Standby dos AI Glasses]) --> VoiceTrigger[Usuário emite comando de voz]
-    VoiceTrigger --> CaptureFrame[Câmera captura frame pontual FPV]
-    CaptureFrame --> OffloadToApp[Transmissão ao Companion App]
-    OffloadToApp --> PrivacyFilter[Filtro de Privacidade Local: Borrar rostos]
-    PrivacyFilter --> VLMInference[Inferência Multimodal VLM/LLM]
-    VLMInference --> CheckConfidence{Nível de Certeza?}
-    CheckConfidence -- "C: Insuficiente" --> TTS_Fail[TTS: Aviso de erro]
-    TTS_Fail --> DiscardMemory
-    CheckConfidence -- "B: Ambiguidade" --> GenClarification[LLM: Pergunta de clarificação]
-    GenClarification --> TTS_Ask[TTS: Áudio nos Óculos]
-    TTS_Ask --> UserAnswer[Microfone captura resposta]
-    UserAnswer --> STT[STT processa resposta]
-    STT --> ResolveAmbiguity[LLM resolve entidade]
-    ResolveAmbiguity --> QueryPriceAPI
-    CheckConfidence -- "A: Alta Confiança" --> QueryPriceAPI[Consulta à API de Preços]
-    QueryPriceAPI --> FormatPrice[Formatação da Resposta]
-    FormatPrice --> SynthSuccessTTS[TTS sintetiza resposta]
-    SynthSuccessTTS --> PlayAudioOutput[Áudio no Alto-falante]
-    PlayAudioOutput --> DiscardMemory[Descarte instantâneo]
-    DiscardMemory --> EndState([Retorno ao modo Standby])
+flowchart TB
+ subgraph Glasses["Smart Glasses (Hardware)"]
+        VoiceTrigger@{ label: "Gatilho de Voz:\n'LookBuy, quanto custa isto?'" }
+        Start(["Standby"])
+        CaptureFrame["Captura Frame Pontual FPV"]
+        MicCapture["Microfone captura resposta"]
+
+        DiscardLocalMem["Descarte de Buffer Local"]
+        PlayAudioOut["Reprodução de Áudio nos Alto-falantes"]
+        EndState(["Standby"])
+  end
+ subgraph CompanionApp["Companion App (Mobile / On-Device)"]
+        OffloadToApp["Recebe Frame Comprimido"]
+        PrivacyFilter["Filtro de Privacidade Local (NPU/GPU)\n(Detecção e Blur de Rostos de Terceiros)"]
+        SendToBackend["Dispara Requisição HTTP/WS"]
+        LocalTTS_Fail@{ label: "TTS Nativo Local\n('Não consegui identificar...')" }
+        LocalTTS_Ask@{ label: "TTS Nativo Local\n('Pergunta de Clarificação')" }
+        OnDeviceSTT["STT Local (Nativo / Whisper-Tiny)"]
+        SendVoiceClarification["Envia Resposta ao Backend"]
+        LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"]
+  end
+ subgraph Backend["Backend (FastAPI / GPUs & Workers)"]
+        VLMInference["Pipeline de Visão & OCR\n(VLM / OCR de Rótulo e Embalagem)"]
+        CheckConfidence{"Nível de Certeza?"}
+        RespFail["Retorna Payload de Erro"]
+        LLMClarification["LLM: Gera Pergunta de Clarificação"]
+        LLMResolve["LLM: Resolve Entidade Final"]
+        PriceScraper["Scraper / Worker de Preços\n(Busca Web / Crawl4AI / APIs Regionais)"]
+        CheckAPI{"Preço Encontrado?"}
+        FormatSuccess["LLM / Service:\nFormata Preço e Promoção"]
+        FormatFallback["LLM / Service:\nFormata Item sem Preço"]
+        SendSuccessPayload["Retorna Texto Formatado"]
+  end
+    Start --> VoiceTrigger
+    VoiceTrigger --> CaptureFrame
+    PlayAudioOut --> DiscardLocalMem
+    DiscardLocalMem --> EndState
+    CaptureFrame -- "Bluetooth (DAT)" --> OffloadToApp
+    OffloadToApp --> PrivacyFilter
+    PrivacyFilter -- Payload Seguro: Imagem + Meta --> SendToBackend
+    LocalTTS_Fail --> PlayAudioOut
+    LocalTTS_Ask --> PlayAudioOut
+    MicCapture --> OnDeviceSTT
+    OnDeviceSTT -- Texto Transcrito --> SendVoiceClarification
+    LocalTTS_Success --> PlayAudioOut
+    SendToBackend --> VLMInference
+    VLMInference --> CheckConfidence
+    CheckConfidence -- Baixa / Ruído --> RespFail
+    RespFail --> LocalTTS_Fail
+    CheckConfidence -- Ambiguidade (Variação) --> LLMClarification
+    LLMClarification --> LocalTTS_Ask
+    LocalTTS_Ask -.-> MicCapture
+    SendVoiceClarification --> LLMResolve
+    LLMResolve --> PriceScraper
+    CheckConfidence -- Alta Confiança --> PriceScraper
+    PriceScraper --> CheckAPI
+    CheckAPI -- Sim --> FormatSuccess
+    CheckAPI -- Não --> FormatFallback
+    FormatSuccess --> SendSuccessPayload
+    FormatFallback --> SendSuccessPayload
+    SendSuccessPayload --> LocalTTS_Success
+
+    VoiceTrigger@{ shape: rect}
+    LocalTTS_Fail@{ shape: rect}
+    LocalTTS_Ask@{ shape: rect}
 ```
 
 ## 2. Estratégia de Teste Local (Sem Hardware) - OBRIGATÓRIO
-Como o hardware físico não estará disponível na fase online [cite: 3], a aplicação **deve ser totalmente testável no celular desde o Dia 1**. O agente deve implementar o seguinte setup de simulação:
+Como o hardware físico não estará disponível na fase online [cite: 3], a aplicação mobile **deve ser totalmente testável no celular desde o Dia 1**. O agente deve implementar o seguinte setup:
 
 * **Simulação do SDK (Mock Device Kit - MDK):** A classe `DatSessionManager` deve usar o `MockDeviceKit.getInstance(context).enable()` se estiver em modo de debug (`BuildConfig.DEBUG`) [cite: 3].
-* **Simulação de Estados:** O código de inicialização do Mock deve obrigatoriamente chamar `pairGlasses(GlassesModel.RAYBAN_META)`, além de forçar os estados `powerOn()` e `don()` (vestir) no dispositivo simulado para que o streaming possa ser iniciado [cite: 3].
+* **Simulação de Estados:** O código de inicialização do Mock deve obrigatoriamente chamar `pairGlasses(GlassesModel.RAYBAN_META)`, além de forçar os estados `powerOn()`, `unfold()` e `don()` (vestir) no dispositivo simulado para que o streaming possa ser iniciado [cite: 3].
 * **Simulação de Câmera:** O MDK deve ser configurado para usar a própria câmera traseira do celular (`Front Camera/Back Camera`) ou um arquivo de vídeo `.mp4` convertido para `H.265` (`HEVC`) como feed de entrada [cite: 3].
-* **Simulação de Áudio (Crucial):** O DAT SDK **não simula áudio** [cite: 3]. Para testar o pipeline de voz (`SttClient` e `TtsClient`), o desenvolvedor deve usar **fones de ouvido Bluetooth comuns** pareados ao celular que suportem o perfil HFP [cite: 3]. O app não deve distinguir entre o fone comum e os óculos.
+* **Simulação de Áudio (Crucial):** O DAT SDK **não simula áudio** [cite: 3]. Para testar o pipeline de voz (`SttClient` e `TtsClient`), o desenvolvedor deve usar **fones de ouvido Bluetooth comuns** pareados ao celular que suportem o perfil HFP [cite: 3]. O app possuirá um modo *fallback* para usar o microfone/alto-falante nativos do celular caso nenhum dispositivo Bluetooth esteja conectado.
+
+> O MDK substitui a base do dispositivo, não a lógica do app: o mesmo pipeline de registro, sessão e stream deve rodar com o mock na etapa online e com os óculos reais na presencial. Não crie uma implementação paralela "fake" para debug.
 
 ## 3. Stack Tecnológica e Dependências
+Esta arquitetura atende ao edital combinando processamento na nuvem com processamento local contínuo de recursos restritos [cite: 1].
+
+**Mobile (Android/Companion App):**
 * **Linguagem & UI:** Kotlin, Jetpack Compose.
-* **Arquitetura:** Clean Architecture + MVVM, Kotlin Coroutines & Flow (StateFlow/SharedFlow) [cite: 3].
-* **Injeção de Dependência:** Hilt ou Koin.
-* **Rede:** Retrofit + OkHttp.
-* **IA On-Device:** ONNX Runtime Mobile, MediaPipe ou Google ML Kit (para processamento de visão/OCR offline) e vosk-android (para STT offline leve).
-* **SDK Meta DAT [cite: 3]:**
-  * `mwdat-core:0.8.0` (Registro, Sessão e Dispositivos).
-  * `mwdat-camera:0.8.0` (Streaming e Captura de Fotos).
-  * `mwdat-mockdevice:0.8.0` (MDK para simular o dispositivo sem hardware).
+* **Arquitetura:** Clean Architecture + MVVM, Kotlin Coroutines & Flow [cite: 3].
+* **Rede:** Ktor ou OkHttp + Retrofit (para WebSocket ou HTTP com o Backend).
+* **IA On-Device (Leve):** ML Kit ou MediaPipe (apenas para o Filtro de Privacidade Local) e Whisper-Tiny/Vosk (para STT).
+* **SDK Meta DAT [cite: 3]:** `mwdat-core:0.8.0`, `mwdat-camera:0.8.0`, `mwdat-mockdevice:0.8.0`.
 
-## 4. Estrutura de Módulos e Pastas (Clean Architecture)
+**Backend (Servidor - Escopo Separado):**
+* FastAPI (Python), integração com VLM (GPT-4o/Gemini Pro Vision), Web Scraping (Crawl4AI) e LLMs.
 
-### Módulos Gradle
-* `:app` (Apresentação, DI, e configuração inicial)
-* `:domain` (Entidades e Regras de Negócio, Kotlin puro)
-* `:data` (Repositórios, APIs)
-* `:meta_wearables` (Encapsulamento do SDK DAT, MDK e Bluetooth)
-* `:ai_engine` (Modelos locais, STT, TTS, Filtros)
+### 3.1 Configuração obrigatória do DAT 0.8.0
 
-### Estrutura de Pacotes (`com.lookbuy.app`)
+O SDK é distribuído por GitHub Packages. O token **não deve ser versionado**: adicione `github_token=SEU_PAT_COM_read_packages` ao `local.properties` e mantenha esse arquivo fora do Git. Em `settings.gradle.kts`, leia o token e adicione o repositório:
+
+```kotlin
+val localProperties = Properties().apply {
+    val path = rootDir.toPath() / "local.properties"
+    if (path.exists()) load(path.inputStream())
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google(); mavenCentral()
+        maven {
+            url = uri("https://maven.pkg.github.com/facebook/meta-wearables-dat-android")
+            credentials {
+                username = ""
+                password = System.getenv("GITHUB_TOKEN")
+                    ?: localProperties.getProperty("github_token")
+            }
+        }
+    }
+}
+```
+
+No catálogo de versões, declare os três artefatos `com.meta.wearable:mwdat-core`, `com.meta.wearable:mwdat-camera` e `com.meta.wearable:mwdat-mockdevice`, todos na versão `0.8.0`; e use `implementation(libs.mwdat.core)`, `implementation(libs.mwdat.camera)` e `implementation(libs.mwdat.mockdevice)` no módulo `app`.
+
+O Manifest deve conter `BLUETOOTH`, `BLUETOOTH_CONNECT`, `INTERNET`, `CAMERA` e, para voz, `RECORD_AUDIO`, além de `uses-feature` de câmera não obrigatório. Use os nomes de metadados reais do DAT e placeholders de Developer Mode:
+
+```xml
+<meta-data android:name="com.meta.wearable.mwdat.APPLICATION_ID"
+    android:value="${mwdat_application_id}" />
+<meta-data android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
+    android:value="${mwdat_client_token}" />
+```
+
+Em `defaultConfig`, defina ambos os placeholders como `"0"` durante o Developer Mode. A `MainActivity` também deve expor um `intent-filter` `VIEW`/`BROWSABLE` com o scheme `lookbuy` para o retorno do app Meta AI.
+
+## 4. Estrutura de Módulos e Pastas (Android Clean Architecture)
+
 ```text
 com.lookbuy.app
 ├── di/                     # Hilt/Koin Modules
 ├── domain/                 
-│   ├── models/             # ProductCaptureResult, ProductPrice, ConfidenceLevel
-│   └── usecases/           # ProcessProductLookUseCase, ResolveAmbiguityUseCase
+│   ├── models/             # AppState, BackendPayloads
+│   └── usecases/           # HandleBackendResponseUseCase, SendFrameToBackendUseCase
 ├── data/                   
-│   ├── repository/         # PriceRepositoryImpl
-│   └── remote/             # PriceApiService (Retrofit) e DTOs
+│   ├── repository/         # BackendRepositoryImpl
+│   └── remote/             # ApiService (WebSocket/HTTP Client para o FastAPI)
 ├── meta_wearables/         
 │   ├── session/            # DatSessionManager (Gerencia a sessão e o MockDeviceKit) [cite: 3]
-│   ├── camera/             # DatCameraClient (Gerencia streams e captura) [cite: 3]
-│   └── audio/              # DatAudioClient (Configura HFP via AudioManager) [cite: 3]
+│   ├── camera/             # DatCameraClient (Gerencia streams e captura YUV) [cite: 3]
+│   └── audio/              # DatAudioClient (Configura HFP via AudioManager ou Fallback) [cite: 3]
 ├── ai_engine/              
-│   ├── vision/             # PrivacyFilter (Blur), VlmInferenceClient
-│   ├── llm/                # DialogueManager
-│   └── speech/             # SttClient (AudioRecord), TtsClient (AudioTrack)
+│   ├── vision/             # PrivacyFilter (ML Kit/MediaPipe para blur de rostos on-device)
+│   └── speech/             # SttClient (AudioRecord -> Texto), TtsClient (AudioTrack nativo)
 └── presentation/           
     ├── screens/            # Jetpack Compose Screens 
     └── viewmodels/         # LookBuyViewModel 
 ```
 
 ## 5. Regras Críticas do Meta DAT SDK (Para o Agente de IA)
-O agente desenvolvedor **deve** obedecer estritamente a estas regras de implementação do DAT SDK [cite: 3]:
+O agente desenvolvedor **deve** obedecer estritamente a estas regras [cite: 3]:
 
-1. **Autenticação e Gradle:** O DAT SDK fica no GitHub Packages e exige um `Personal Access Token (PAT)` no `local.properties` com permissão `read:packages` [cite: 3].
-2. **Inicialização Única:** `Wearables.initialize(context)` deve ser chamado apenas uma vez no `onCreate()` da classe `Application`. Se chamado antes, lançará `NOT_INITIALIZED` [cite: 3].
-3. **AndroidManifest (Callback do Meta AI):** É obrigatório declarar um `intent-filter` na Activity com um *URI scheme* próprio (ex: `lookbuy://`) para que o app Meta AI consiga devolver o usuário ao app após o registro. Também deve incluir as tags `<meta-data>` para `APPLICATION_ID` e `CLIENT_TOKEN` (que podem ser `0` durante o Developer Mode) [cite: 3].
-4. **Fluxo de Registro:** O app não pode criar a sessão sem antes verificar o registro. Deve chamar `Wearables.startRegistration` e observar o `Wearables.registrationState` (StateFlow) até que atinja o estado `REGISTERED` [cite: 3].
-5. **Gerenciamento de Sessão:** A conexão é mantida pela `DeviceSession`. Iniciar/Parar são operações *fire-and-forget*. O app deve observar `session.state` para saber quando passou para `STARTED` antes de adicionar streams de vídeo [cite: 3].
-6. **Resolução de Vídeo:** O `StreamConfiguration` deve usar resolução `MEDIUM` (504x896) ou `LOW` a 15 ou 24 FPS. Defina `compressVideo = false` para receber frames YUV ideais para inferência em modelos locais [cite: 3].
-7. **Captura Fotográfica e MDK Rotação:** Só chame `capturePhoto()` quando o stream estiver em `STREAMING`. A API retorna `PhotoData.Bitmap` ou `HEIC`. **Atenção:** Quando o MDK está ativo usando a câmera do celular, a imagem retornada vem rotacionada em 90 graus (comportamento nativo documentado). A IA de visão deve rotacionar a imagem de volta [cite: 3].
-8. **Áudio:** O DAT SDK **não gerencia áudio** [cite: 3]. O áudio é roteado pelas APIs padrão do Android. Utilize o perfil **HFP (Hands-Free Profile)** chamando `setCommunicationDevice`. Configure o áudio HFP *antes* de iniciar a sessão de streaming de vídeo [cite: 3].
-9. **Permissões Exigidas:** `BLUETOOTH_CONNECT`, `RECORD_AUDIO`, `CAMERA` [cite: 3]. (A permissão `CAMERA` do Android é exigida pelo MDK para usar a lente do celular) [cite: 3].
+1. **Autenticação e Gradle:** O DAT SDK fica no GitHub Packages e exige um `PAT` com `read:packages` no `local.properties` (`github_token`) ou na variável de ambiente `GITHUB_TOKEN`. Nunca inclua o token no código ou no Git [cite: 3].
+2. **Inicialização Única:** `Wearables.initialize(context)` deve ser chamado apenas uma vez no `onCreate()` da classe `Application` [cite: 3].
+3. **AndroidManifest (Callback do Meta AI):** É obrigatório declarar um `intent-filter` na Activity com um *URI scheme* (ex: `lookbuy://`). Inclua `com.meta.wearable.mwdat.APPLICATION_ID` e `com.meta.wearable.mwdat.CLIENT_TOKEN`; ambos podem usar o placeholder `0` no Developer Mode [cite: 3].
+4. **Fluxo de Registro:** Chame `Wearables.startRegistration` e observe o `Wearables.registrationState` (StateFlow) até atingir `REGISTERED` antes de criar a sessão [cite: 3].
+5. **Gerenciamento de Sessão:** Crie a sessão via `Wearables.createSession(AutoDeviceSelector())`. `start()`/`stop()` são *fire-and-forget*: observe `session.state`, trate `errors` e só execute `addStream(...)` quando o estado for `DeviceSessionState.STARTED` [cite: 3].
+6. **Resolução de Vídeo:** Use `StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 15 ou 24, compressVideo = false)`; trate os frames de `stream.videoStream` com `Flow` [cite: 3].
+7. **Captura Fotográfica e MDK Rotação:** Só chame `capturePhoto()` com stream/sessão ativos. Quando o MDK usar a câmera do celular, a imagem retornada pode vir rotacionada em 90 graus; normalize-a antes de aplicar o filtro de privacidade e enviar ao backend [cite: 3].
+8. **Áudio e Fallback:** O SDK **não gerencia áudio** [cite: 3]. Roteie usando **HFP (Hands-Free Profile)** via `setCommunicationDevice`. Se `TYPE_BLUETOOTH_SCO` não for encontrado, implemente fallback automático para os alto-falantes/mic do aparelho. Configure o áudio *antes* da sessão de vídeo [cite: 3].
+9. **Permissões Exigidas:** Declare `BLUETOOTH`, `BLUETOOTH_CONNECT`, `INTERNET`, `CAMERA` e `RECORD_AUDIO`; solicite em runtime as permissões perigosas aplicáveis (`CAMERA`, `RECORD_AUDIO` e `BLUETOOTH_CONNECT` em Android 12+) [cite: 3].
+10. **Concorrência e ciclo de vida:** Colete os `Flow`s do DAT em `viewModelScope`; use `Dispatchers.IO` para I/O e `Dispatchers.Default` para decodificação, filtro de privacidade e inferência. Não mantenha um `CoroutineScope` manual que sobreviva à tela [cite: 1].
 
-## 6. Plano de Execução (Fases de Desenvolvimento)
+### 5.1 Sequência de referência: MDK real em debug
+
+```kotlin
+if (BuildConfig.DEBUG) {
+    val mockKit = MockDeviceKit.getInstance(context)
+    mockKit.enable()
+    val glasses = mockKit.pairGlasses(GlassesModel.RAYBAN_META).getOrNull()
+        ?: error("Não foi possível parear o Ray-Ban Meta simulado")
+    glasses.powerOn()
+    glasses.unfold()
+    glasses.don()
+    glasses.services.camera.setCameraFeed(CameraFacing.BACK)
+}
+```
+
+Depois dessa preparação, siga o ciclo normal do DAT: `Wearables.createSession(...)`, `session.start()`, aguarde `STARTED` e chame `session.addStream(...)`. Ao encerrar testes instrumentados, chame `mockKit.disable()` para restaurar a pilha real. Vídeos usados como feed devem estar em H.265/HEVC.
+
+## 6. Plano de Execução (Fases de Desenvolvimento do App Companion)
 Para o Agente de IA, siga esta ordem de implementação:
 
 * **Fase 1: Configuração Base & Mock Device Kit:**
-  * Configurar o projeto Gradle, permissões, Intent Filters (URI scheme) e GitHub Packages [cite: 3].
-  * Implementar `DatSessionManager` ativando o `MockDeviceKit` no modo debug [cite: 3].
-  * Parear o dispositivo mockado, chamar `powerOn()` e `don()`, e expor os estados para a UI [cite: 3].
-* **Fase 2: Integração de Áudio e Voz (Via Fone Bluetooth):**
-  * Criar `DatAudioClient` que força a comunicação para `TYPE_BLUETOOTH_SCO`.
-  * Implementar captura (`AudioRecord`) e reprodução e testar com um fone de ouvido comum pareado ao celular [cite: 3].
-* **Fase 3: IA Local e Visão (Câmera do Celular):**
-  * Configurar o `DatCameraClient` para iniciar o stream [cite: 3]. Como o mock está ativo, a imagem virá da câmera traseira do celular [cite: 3].
-  * Implementar o tratamento de rotação de 90° gerado pelo MDK [cite: 3].
-  * Implementar o filtro de privacidade e VLM on-device.
+  * Configurar GitHub Packages, token local, dependências DAT, Manifest (metadados `mwdat`, permissões e callback) [cite: 3].
+  * Implementar `DatSessionManager` com as APIs reais `Wearables` e `MockDeviceKit`, ativando o mock apenas em debug [cite: 3].
+  * Parear mock, `powerOn()`, `unfold()`, `don()` e configurar a câmera traseira/feed H.265; expor os `StateFlow`s reais de registro e sessão para UI [cite: 3].
+* **Fase 2: Integração de Áudio e Voz:**
+  * Criar `DatAudioClient` com suporte a `TYPE_BLUETOOTH_SCO` e fallback para áudio do celular.
+  * Implementar primeiro `SpeechRecognizer` nativo (com preferência offline) e `TextToSpeech` para validar o ciclo; evoluir para Whisper tiny/Vosk e Piper se a demonstração precisar comprovar IA de voz totalmente local.
+* **Fase 3: Visão Local e Conexão Backend:**
+  * Configurar `DatCameraClient` para capturar fotos (`capturePhoto()`) resolvendo o problema da rotação de 90° do MDK [cite: 3].
+  * Implementar o `PrivacyFilter` (aplicando blur em rostos encontrados no frame antes da transmissão).
+  * Criar a camada de Rede (`ApiService`) para enviar a imagem segura ao FastAPI e processar os retornos (Erro, Ambiguidade, Sucesso).
 * **Fase 4: Orquestração e UI:**
-  * Implementar os UseCases e integrá-los no `LookBuyViewModel`.
-  * Criar as telas em Compose observando os estados mockados perfeitamente como se fossem o óculos real.
+  * Conectar o fluxo: Disparo de Voz -> Foto -> Privacy Filter -> Backend -> TTS (Sucesso/Erro) ou STT de Resposta (Ambiguidade).
+  * Montar a UI simples no Jetpack Compose refletindo cada etapa.
