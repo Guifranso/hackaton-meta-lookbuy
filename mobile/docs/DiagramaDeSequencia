@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor User as Usuário / Óculos
+    participant App as Companion App
+    participant WS as FastAPI WebSocket (/ws/lookup)
+    participant VLM as Pipeline VLM & OCR
+    participant Scraper as Worker de Preços
+
+    %% 1. Início de Sessão e Conexão
+    User->>App: Gatilho de Voz + Frame FPV
+    Note over App: Aplica Filtro de Privacidade Local (Blur em rostos)
+    App->>WS: 1. Abre Conexão WebSocket (Session Handshake)
+    WS-->>App: Conexão Estabelecida (ACK)
+
+    %% 2. Envio do Frame Processado
+    App->>WS: Envia Payload Inicial (JSON + Imagem Base64 / Binário)
+
+    %% 3. Processamento no Backend
+    WS->>VLM: Inferência Multimodal (Identificação + OCR)
+
+    alt Cenário C: Confiança Insuficiente / Ruído
+        VLM-->>WS: Falha de Identificação
+        WS-->>App: WS Message: { status: "error", message: "Não consegui identificar..." }
+        App->>User: TTS Nativo Local (Erro)
+        App->>WS: Fecha Conexão (Close Code 1000)
+
+    else Cenário B: Ambiguidade (Ex: 250g vs 500g)
+        VLM-->>WS: Ambiguidade detectada
+        WS-->>App: WS Message: { status: "clarification_needed", question: "É o pacote de 250g ou 500g?" }
+        App->>User: TTS Nativo Local (Pergunta)
+        User->>App: Resposta por Voz
+        Note over App: STT Local (Transcreve áudio -> texto)
+        App->>WS: WS Message: { type: "clarification_response", answer: "250g" }
+        WS->>Scraper: Busca Preço para entidade resolvida
+        Scraper-->>WS: Preço encontrado
+        WS-->>App: WS Message: { status: "success", product: "Café 250g", price: "R$ 14,90" }
+        App->>User: TTS Nativo Local (Sucesso)
+        App->>WS: Fecha Conexão (Close Code 1000)
+
+    else Cenário A: Alta Confiança
+        VLM-->>WS: Produto identificado com precisão
+        WS-->>App: WS Message: { status: "processing", message: "Buscando melhores preços..." }
+        WS->>Scraper: Busca de Preço / Scraping
+        Scraper-->>WS: Preços extraídos
+        WS-->>App: WS Message: { status: "success", product: "...", price: "..." }
+        App->>User: TTS Nativo Local (Sucesso)
+        App->>WS: Fecha Conexão (Close Code 1000)
+    end

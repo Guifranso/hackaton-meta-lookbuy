@@ -1,0 +1,56 @@
+flowchart TD
+    %% SUBGRAPH 1: SMART GLASSES
+    subgraph Glasses[" Smart Glasses (Hardware)"]
+        Start([Standby]) --> VoiceTrigger[Gatilho de Voz:\n'LookBuy, quanto custa isto?']
+        VoiceTrigger --> CaptureFrame[Captura Frame Pontual FPV]
+        PlayAudioOut[Reprodução de Áudio nos Alto-falantes] --> DiscardLocalMem[Descarte de Buffer Local]
+        DiscardLocalMem --> EndState([Standby])
+    end
+
+    %% SUBGRAPH 2: COMPANION APP (LIGHTWEIGHT / ON-DEVICE)
+    subgraph CompanionApp[" Companion App (Mobile / On-Device)"]
+        CaptureFrame -->|BLE / Wi-Fi Direct| OffloadToApp[Recebe Frame Comprimido]
+
+        OffloadToApp --> PrivacyFilter["Filtro de Privacidade Local (NPU/GPU)\n(Detecção e Blur de Rostos de Terceiros)"]
+
+        PrivacyFilter -->|Payload Seguro: Imagem + Meta| SendToBackend[Dispara Requisição HTTP/WS]
+
+        %% Interações de Voz On-Device
+        LocalTTS_Fail["TTS Nativo Local\n('Não consegui identificar...')"] --> PlayAudioOut
+        LocalTTS_Ask["TTS Nativo Local\n('Pergunta de Clarificação')"] --> PlayAudioOut
+
+        MicCapture[Microfone captura resposta] --> OnDeviceSTT["STT Local (Nativo / Whisper-Tiny)"]
+        OnDeviceSTT -->|Texto Transcrito| SendVoiceClarification[Envia Resposta ao Backend]
+
+        LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"] --> PlayAudioOut
+    end
+
+    %% SUBGRAPH 3: BACKEND (FASTAPI / HEAVY COMPUTE)
+    subgraph Backend[" Backend (FastAPI / GPUs & Workers)"]
+        SendToBackend --> VLMInference["Pipeline de Visão & OCR\n(VLM / OCR de Rótulo e Embalagem)"]
+
+        VLMInference --> CheckConfidence{Nível de Certeza?}
+
+        %% Cenário C: Falha
+        CheckConfidence -- "Baixa / Ruído" --> RespFail[Retorna Payload de Erro]
+        RespFail --> LocalTTS_Fail
+
+        %% Cenário B: Ambiguidade
+        CheckConfidence -- "Ambiguidade (Variação)" --> LLMClarification["LLM: Gera Pergunta de Clarificação"]
+        LLMClarification --> LocalTTS_Ask
+        LocalTTS_Ask -.-> MicCapture
+        SendVoiceClarification --> LLMResolve["LLM: Resolve Entidade Final"]
+        LLMResolve --> PriceScraper
+
+        %% Cenário A: Alta Confiança
+        CheckConfidence -- "Alta Confiança" --> PriceScraper["Scraper / Worker de Preços\n(Busca Web / Crawl4AI / APIs Regionais)"]
+
+        PriceScraper --> CheckAPI{Preço Encontrado?}
+
+        CheckAPI -- "Sim" --> FormatSuccess["LLM / Service:\nFormata Preço e Promoção"]
+        CheckAPI -- "Não" --> FormatFallback["LLM / Service:\nFormata Item sem Preço"]
+
+        FormatSuccess --> SendSuccessPayload[Retorna Texto Formatado]
+        FormatFallback --> SendSuccessPayload
+        SendSuccessPayload --> LocalTTS_Success
+    end
