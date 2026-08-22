@@ -1,20 +1,6 @@
 # Respostas para o Formulário de Envio — LookBuy
 
-Este documento reúne respostas prontas com base na proposta, arquitetura, diagramas e código do repositório. Campos pessoais, uploads e vídeo que não estão no projeto foram marcados como **[PREENCHER]**.
-
 > **Nota de transparência:** o protótipo Android já integra Meta DAT/MDK, câmera, STT, TTS e o fluxo de captura. O `VisionClient` e os repositórios de preços retornam dados mockados; VLM/OCR, consulta real de preços e blur de rostos constam como a próxima integração da arquitetura. Não apresente essas três partes como implementadas se a avaliação exigir comprovação em execução.
-
-## Página 1 — Identificação
-
-### E-mail *
-
-**[PREENCHER: e-mail de contato da equipe]**
-
-### Nome da equipe *
-
-**[PREENCHER: nome da equipe na inscrição]**
-
-### Trilha temática *
 
 **Produtividade**
 
@@ -24,21 +10,21 @@ Este documento reúne respostas prontas com base na proposta, arquitetura, diagr
 
 ### Resumo em uma frase *
 
-Assistente mãos-livres que identifica produtos pela câmera e informa por voz seu preço estimado para consumidores em lojas físicas.
+Assistente de compras por voz que identifica produtos pela câmera e informa por voz seu preço estimado do produto observado.
 
 ## Página 2 — Seção A: Documento estruturado
 
 ### A1 — O problema *
 
-Em compras presenciais, comparar preços ou descobrir o valor de produtos sem etiqueta exige tirar o celular do bolso, abrir um app e escanear ou digitar. Isso interrompe a compra e exclui pessoas com baixa visão ou mobilidade reduzida que precisam de uma alternativa simples e acessível.
+Ao se deparar com um produto, o consumidor frequentemente decide sem contexto suficiente para avaliar se vale a pena: preço médio, variações entre embalagens e alternativas similares. Buscar essas informações no celular interrompe o momento da decisão e torna comparações rápidas menos práticas.
 
 ### A2 — Usuário-alvo *
 
-Consumidores que fazem compras presenciais, especialmente pessoas com baixa visão, idosos ou quem está com as mãos ocupadas com carrinho e produtos. Usam a solução pontualmente, várias vezes em uma ida ao supermercado, farmácia ou loja, para decidir se vale comprar um item.
+Pessoas que querem avaliar melhor um produto antes de decidir comprá-lo, principalmente em situações presenciais como supermercados, farmácias e lojas. Usam o LookBuy pontualmente, quando desejam comparar preço médio, embalagem, variante e alternativas similares sem interromper o momento da decisão.
 
 ### A3 — Walkthrough de interação (caminho principal) *
 
-1. No supermercado, a pessoa olha para um produto e segura o botão de microfone no companion app (ou usa o gatilho de voz dos óculos).
+1. A pessoa olha para um produto e segura o botão de microfone no companion app (ou usa o gatilho de voz dos óculos).
 2. O `SpeechRecognizer` do Android transcreve “LookBuy, quanto custa isto?” e o app aciona a câmera DAT; em debug, o MDK usa a câmera traseira do celular como visão dos óculos.
 3. O `DatCameraClient` captura uma foto; se `capturePhoto()` não estiver disponível no MDK, usa o último frame YUV válido da prévia como fallback.
 4. Antes do envio planejado ao backend, a camada `PrivacyFilter` normaliza a rotação do frame e é o ponto de aplicação do blur local de rostos; o payload seguro segue para VLM/OCR e consulta de preços.
@@ -165,48 +151,16 @@ Fonte recomendada: o fluxo de arquitetura em [LookBuy_Arquitetura.md](LookBuy_Ar
 
 O código-fonte está em [LookBuy_Arquitetura.md](LookBuy_Arquitetura.md), [FluxoDeSequencia](FluxoDeSequencia) e [DiagramaDeSequencia](DiagramaDeSequencia). Ele contém os nós de IA/VLM, câmera, áudio, privacidade e eficiência de bateria.
 
-## Página 10 — Seção C: Vídeo-pitch
-
-### C1 — Vídeo-pitch elevator *
-
-**[PREENCHER: URL do vídeo não listado no YouTube, Drive ou Vimeo.]**
-
-### C2 — Duração do vídeo *
-
-**[PREENCHER após a gravação: selecionar “Entre 2 e 3 min”.]**
-
 ## Página 11 — Avaliação do Ideathon
 
 ### De 0 a 10, o quanto o Ideathon de hoje foi útil para a equipe? *
 
-**[PREENCHER: avaliação pessoal da equipe.]**
+6
 
 ### O que foi mais útil?
 
-**[PREENCHER: resposta pessoal da equipe.]**
+conseguimos tirar bastante dúvidas sobre o hackaton e obter uma visão geral do que deveriamos entregar, além de obtermos uma visão geral das equipes que estamos competindo contra
 
 ### O que melhorar?
 
-**[PREENCHER: resposta pessoal da equipe.]**
 
-## Página 12 — Confirmações finais
-
-### Coerência entre artefatos *
-
-- [x] Confirmamos que o documento, o diagrama e o vídeo descrevem a mesma solução de forma coerente.
-
-### Autoria e uso de IA *
-
-- [x] Confirmamos que as decisões técnicas e o conteúdo são da equipe. Ferramentas de IA podem ter apoiado a redação, mas o conteúdo reflete nosso trabalho.
-
-### Escopo mantido *
-
-- [x] Confirmamos que esta entrega mantém o escopo do projeto/ideia submetido na inscrição.
-- [ ] Mudamos o escopo do projeto/ideia submetido.
-
-## Observações de submissão
-
-- Gere os uploads da seção B a partir dos diagramas Mermaid existentes.
-- Grave e hospede o vídeo antes de preencher a seção C.
-- Complete apenas as três respostas da avaliação do Ideathon com a experiência real da equipe.
-- Caso a banca exija implementação efetiva de todos os checkpoints, concluam a integração de VLM/OCR, preço remoto e blur de rostos antes da apresentação; esses componentes ainda são mocks ou pontos de extensão no código atual.
