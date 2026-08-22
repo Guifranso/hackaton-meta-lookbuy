@@ -12,8 +12,8 @@ flowchart LR
         Service[Foreground Service<br/>notificação persistente]
         AudioRoute[DatAudioClient<br/>HFP/SCO ou fallback do celular]
         Wake[openWakeWord<br/>modelo personalizado LookBuy]
-        VAD[WebRTC VAD<br/>5 s para iniciar · 2,5 s de silêncio]
-        Whisper[Whisper Tiny local<br/>comando de até 12 s]
+        VAD[WebRTC VAD]
+        Whisper[Whisper Tiny local]
         Intent{Comando válido?}
         Camera[DatCameraClient<br/>captura pontual]
         Fallback[Fallback<br/>último frame YUV válido]
@@ -22,7 +22,7 @@ flowchart LR
         UseCase[ProcessProductLookUseCase<br/>atualiza UI]
         TTS[TextToSpeech PT-BR]
         Pause[Durante TTS:<br/>pausa openWakeWord e VAD]
-        Clarification[Janela de clarificação<br/>até 8 s · uma repetição]
+        Clarification[Janela de clarificação]
         ClarificationVAD[WebRTC VAD<br/>resposta de clarificação]
         ClarificationSTT[Whisper Tiny local<br/>resposta de clarificação]
     end
