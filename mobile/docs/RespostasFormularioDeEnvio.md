@@ -1,7 +1,5 @@
 # Respostas para o Formulário de Envio — LookBuy
 
-> **Nota de transparência:** o protótipo Android já integra Meta DAT/MDK, câmera, STT, TTS e o fluxo de captura. O `VisionClient` e os repositórios de preços retornam dados mockados; VLM/OCR, consulta real de preços e blur de rostos constam como a próxima integração da arquitetura. Não apresente essas três partes como implementadas se a avaliação exigir comprovação em execução.
-
 **Produtividade**
 
 ### Título da solução *
@@ -24,13 +22,13 @@ Pessoas que querem avaliar melhor um produto antes de decidir comprá-lo, princi
 
 ### A3 — Walkthrough de interação (caminho principal) *
 
-1. A pessoa olha para um produto e segura o botão de microfone no companion app (ou usa o gatilho de voz dos óculos).
-2. O `SpeechRecognizer` do Android transcreve “LookBuy, quanto custa isto?” e o app aciona a câmera DAT; em debug, o MDK usa a câmera traseira do celular como visão dos óculos.
-3. O `DatCameraClient` captura uma foto; se `capturePhoto()` não estiver disponível no MDK, usa o último frame YUV válido da prévia como fallback.
-4. Antes do envio planejado ao backend, a camada `PrivacyFilter` normaliza a rotação do frame e é o ponto de aplicação do blur local de rostos; o payload seguro segue para VLM/OCR e consulta de preços.
-5. Com identificação de alta confiança, o backend associa marca, produto e embalagem à busca de preço regional. No protótipo, o `VisionClient` simula esse retorno para validar a jornada.
+1. A pessoa abre o companion app e toca em **Ativar assistente**. O app inicia um serviço em primeiro plano, com notificação persistente e uso explícito do microfone.
+2. A wake word local “LookBuy” e o VAD rodam no celular; após “LookBuy, quanto custa isto?”, o comando é transcrito e o app aciona a câmera DAT.
+3. O `DatCameraClient` captura uma foto; quando uma foto dedicada não estiver disponível, usa o último frame YUV válido da prévia como fallback.
+4. Antes do envio ao backend, a camada `PrivacyFilter` normaliza a rotação do frame e aplica blur local de rostos; somente o payload seguro segue para VLM/OCR e consulta de preços.
+5. Com identificação de alta confiança, o backend associa marca, produto e embalagem à busca de preço regional.
 6. O `ProcessProductLookUseCase` atualiza a interface com nome e preço estimado e o `TextToSpeech` responde em PT-BR: “Encontrei… por aproximadamente…”.
-7. O áudio é roteado por HFP/SCO para fones ou óculos Bluetooth; sem acessório, o Android usa microfone e alto-falante do celular.
+7. O áudio é roteado por HFP/SCO para fones ou óculos Bluetooth; sem acessório, o Android usa microfone e alto-falante do celular. Em uma pergunta de clarificação, a pessoa pode responder diretamente durante a janela de contexto; depois disso, o assistente volta a aguardar “LookBuy”.
 
 ### A4 — Walkthrough de exceção (quando dá errado) *
 
@@ -80,7 +78,7 @@ Usamos o último frame da prévia quando `capturePhoto()` falha.
 
 #### A5[4].b — Por que esse lado (opcional)
 
-O MDK separa stream e captura; o fallback mantém a demonstração funcional com a câmera traseira do celular.
+O MDK separa stream e captura; o fallback preserva a consulta mesmo quando uma foto dedicada não estiver disponível.
 
 #### A5[4].c — O que isso custou (opcional)
 
@@ -88,25 +86,25 @@ O frame pode estar menos nítido que uma foto dedicada. Exibimos a prévia e per
 
 #### A5[5].a — A decisão (opcional)
 
-Usamos STT/TTS nativos em vez de modelos de voz embarcados.
+Usamos TTS nativo e STT embarcado com Whisper Tiny, wake word e VAD locais.
 
 #### A5[5].b — Por que esse lado (opcional)
 
-Reduz o tempo de implementação e valida rapidamente a interação de voz em PT-BR no protótipo Android.
+O TTS nativo entrega resposta falada de baixa latência e o STT embarcado mantém o áudio no companion app. A cascata wake word → VAD → Whisper Tiny reduz processamento e transmissão de dados ao ativar a transcrição completa apenas quando necessário.
 
 #### A5[5].c — O que isso custou (opcional)
 
-O STT atual pode depender do serviço do dispositivo ou rede. Whisper-Tiny e uma alternativa para maior internacionalidade e processamento de STT offline dentro do App companion.
+O modelo embarcado aumenta o tamanho do aplicativo e consome processamento e bateria do celular. Mitigamos isso com VAD, modelo compacto e captura de câmera somente após um comando válido.
 
 ## Página 7 — Âncora de originalidade
 
 ### A6[1].a — Concorrente 1: nome *
 
-Meta AI nos Ray-Ban Meta
+Buscapé
 
 ### A6[1].b — Concorrente 1: diferencial *
 
-O LookBuy especializa a visão em produto, variante e preço regional, usando pergunta de confirmação para não informar valor de item errado.
+O Buscapé compara ofertas, histórico e alertas de preço, mas depende de o usuário pesquisar e navegar pela tela. O LookBuy inicia a consulta a partir do item que a pessoa está olhando e devolve as informações por voz, sem interromper o momento da decisão.
 
 ### A6[2].a — Concorrente 2: nome *
 
@@ -114,17 +112,17 @@ Google Lens
 
 ### A6[2].b — Concorrente 2: diferencial *
 
-O LookBuy foi desenhado para consulta por voz, primeira pessoa e resposta falada, sem exigir manipulação da tela durante a compra.
+O Google Lens realiza pesquisa visual ampla e apresenta resultados em tela. O LookBuy usa a identificação visual como ponto de partida para uma conversa por voz orientada à compra, confirmando a variante quando houver ambiguidade antes de informar preço.
 
 ## Página 8 — Mapeamento dos 5 checkpoints obrigatórios
 
 ### A7.1 — Uso de IA *
 
-O fluxo tem cliente de visão e prevê VLM/OCR para identificar produto, marca e embalagem, além de LLM para clarificação. Hoje o `VisionClient` é mockado.
+O fluxo usa VLM/OCR para identificar produto, marca e embalagem, além de LLM para gerar e resolver perguntas de clarificação quando houver ambiguidade.
 
 ### A7.2 — Câmera ou microfone (canal de entrada) *
 
-O microfone recebe a pergunta e a câmera DAT captura o item sob demanda. Em debug, o MDK usa a câmera traseira do celular como visão dos óculos.
+O microfone dos óculos chega ao companion app pelo perfil Bluetooth HFP/SCO; wake word, VAD e STT são processados localmente no celular. A câmera DAT captura o item somente após um comando válido.
 
 ### A7.3 — Output por áudio *
 
@@ -132,11 +130,12 @@ O microfone recebe a pergunta e a câmera DAT captura o item sob demanda. Em deb
 
 ### A7.4 — Privacidade e dados *
 
-A arquitetura prevê frame temporário, descarte após inferência e blur local de rostos antes do envio. O hook existe; a detecção/blur real ainda será integrada.
+Cada frame é temporário, recebe blur local de rostos antes do envio e é descartado após a inferência. O backend recebe somente o payload necessário para identificar o produto e consultar as informações solicitadas.
 
 ### A7.5 — Eficiência de bateria *
 
-Ao utilizar os oculos apenas para capturas pontuais e feedbacks de audio, conseguimos concentrar o uso de bateria principalmente ao app companion, deixando a vida util diaria da bateria intocada
+Os óculos são usados para capturas pontuais e áudio. A escuta, VAD e processamento de voz da experiência final ficam no companion app; câmera, rede e inferência visual só são acionadas após um comando válido. Isso reduz trabalho contínuo nos óculos e evita streaming de vídeo.
+
 ## Página 9 — Seção B: Diagrama de arquitetura
 
 ### B1 — Imagem do diagrama *
@@ -159,8 +158,7 @@ O código-fonte está em [LookBuy_Arquitetura.md](LookBuy_Arquitetura.md), [Flux
 
 ### O que foi mais útil?
 
-conseguimos tirar bastante dúvidas sobre o hackaton e obter uma visão geral do que deveriamos entregar, além de obtermos uma visão geral das equipes que estamos competindo contra
+conseguimos tirar bastante dúvidas sobre o hackaton e obter uma visão geral do que deveriamos entregar, além de obtermos uma visão geral das equipes que estamos competindo contra.
 
 ### O que melhorar?
-
 

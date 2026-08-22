@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- CAMERA é opcional pois o hardware físico (óculos) pode substituir -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -23,6 +25,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LookBuy"
         tools:targetApi="31">
+
+        <service
+            android:name=".audio.LookBuyAssistantService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <activity
             android:name=".MainActivity"

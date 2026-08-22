@@ -7,7 +7,7 @@ Este documento serve como o **Plano de Arquitetura e Contexto Base** para o dese
 ```mermaid
 flowchart TB
  subgraph Glasses["Smart Glasses (Hardware)"]
-        VoiceTrigger@{ label: "Gatilho de Voz:\n'LookBuy, quanto custa isto?'" }
+        VoiceTrigger@{ label: "Wake word local no celular:\n'LookBuy' (assistente já ativado)" }
         Start(["Standby"])
         CaptureFrame["Captura Frame Pontual FPV"]
         MicCapture["Microfone captura resposta"]
@@ -204,3 +204,22 @@ Para o Agente de IA, siga esta ordem de implementação:
 * **Fase 4: Orquestração e UI:**
   * Conectar o fluxo: Disparo de Voz -> Foto -> Privacy Filter -> Backend -> TTS (Sucesso/Erro) ou STT de Resposta (Ambiguidade).
   * Montar a UI simples no Jetpack Compose refletindo cada etapa.
+
+## 7. Ativação do assistente e estados de conversa
+
+O DAT não expõe o wake word **"Hey Meta"**, nem um evento público do botão dos óculos para abrir um app de terceiros. Por isso, a primeira ativação é explícita: o usuário abre o LookBuy no celular e toca em **Ativar assistente**. Essa ação inicia um *foreground service* de microfone, com notificação persistente, para que o pipeline de voz continue com a tela apagada.
+
+Após essa ativação, o app companion recebe o áudio dos óculos por HFP. Uma wake word própria, processada localmente no celular, ativa o restante do pipeline. O desenho final usa uma cascata de baixo consumo: **wake word → VAD → Whisper Tiny → comando**. Câmera, VLM e consulta de preços continuam desligados até existir um comando válido.
+
+```text
+INATIVO
+  → ESCUTANDO_WAKE_WORD
+  → OUVINDO_COMANDO
+  → PROCESSANDO
+  → RESPONDENDO ou AGUARDANDO_CLARIFICAÇÃO
+  → ESCUTANDO_WAKE_WORD
+```
+
+Em `AGUARDANDO_CLARIFICAÇÃO`, a resposta seguinte do usuário é aceita sem repetir “LookBuy”, durante uma janela curta. Encerrada a conversa ou expirado o tempo, o app volta a exigir a wake word. Esses estados de conversa são independentes dos estados técnicos da `DeviceSession` do DAT.
+
+> **Estado do MVP:** o app já possui ativação explícita e serviço em primeiro plano, mas ainda usa push-to-talk com `SpeechRecognizer`. Wake word, VAD e Whisper Tiny são a próxima integração para a experiência contínua.

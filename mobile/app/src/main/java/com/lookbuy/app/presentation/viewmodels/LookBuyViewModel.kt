@@ -2,6 +2,7 @@ package com.lookbuy.app.presentation.viewmodels
 
 import android.app.Application
 import android.app.Activity
+import com.lookbuy.app.audio.LookBuyAssistantService
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -94,6 +95,10 @@ class LookBuyViewModel(application: Application) : AndroidViewModel(application)
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
 
+    private val _assistantState = MutableStateFlow(AssistantState.INACTIVE)
+    /** Estado de conversa; não confundir com [sessionState], que é estado técnico do DAT. */
+    val assistantState: StateFlow<AssistantState> = _assistantState.asStateFlow()
+
     private val _lastAnalysisResult = MutableStateFlow<ProductAnalysisResult?>(null)
     val lastAnalysisResult: StateFlow<ProductAnalysisResult?> = _lastAnalysisResult.asStateFlow()
 
@@ -174,10 +179,16 @@ class LookBuyViewModel(application: Application) : AndroidViewModel(application)
     private fun runVisionPipeline(image: Bitmap, speechText: String) {
         viewModelScope.launch {
             _isProcessing.value = true
+            _assistantState.value = AssistantState.PROCESSING
             try {
                 _lastAnalysisResult.value = processLookUseCase(image, speechText)
             } finally {
                 _isProcessing.value = false
+                _assistantState.value = if (_assistantState.value != AssistantState.INACTIVE) {
+                    AssistantState.LISTENING_FOR_WAKE_WORD
+                } else {
+                    AssistantState.INACTIVE
+                }
             }
         }
     }
@@ -203,8 +214,35 @@ class LookBuyViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Controles de Voz ──────────────────────────────────────────────────────
 
-    fun startListening() = sttClient.startListening()
-    fun stopListening()  = sttClient.stopListening()
+    fun startListening() {
+        if (_assistantState.value == AssistantState.INACTIVE) return
+        _assistantState.value = AssistantState.LISTENING_FOR_COMMAND
+        sttClient.startListening()
+    }
+
+    fun stopListening() {
+        sttClient.stopListening()
+        if (_assistantState.value == AssistantState.LISTENING_FOR_COMMAND) {
+            _assistantState.value = AssistantState.LISTENING_FOR_WAKE_WORD
+        }
+    }
+
+    /**
+     * Ativação explícita do assistente. O serviço permite que a futura wake word
+     * local rode com a tela apagada; o MVP ainda usa push-to-talk para iniciar STT.
+     */
+    fun activateAssistant() {
+        LookBuyAssistantService.start(getApplication())
+        _assistantState.value = AssistantState.LISTENING_FOR_WAKE_WORD
+        ttsClient.speak("LookBuy ativo. Diga LookBuy para iniciar uma consulta.")
+    }
+
+    fun deactivateAssistant() {
+        sttClient.stopListening()
+        LookBuyAssistantService.stop(getApplication())
+        _assistantState.value = AssistantState.INACTIVE
+        ttsClient.speak("LookBuy desativado.")
+    }
 
     // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
@@ -215,5 +253,6 @@ class LookBuyViewModel(application: Application) : AndroidViewModel(application)
         audioClient.stopHfp()
         sttClient.destroy()
         ttsClient.destroy()
+        LookBuyAssistantService.stop(getApplication())
     }
 }

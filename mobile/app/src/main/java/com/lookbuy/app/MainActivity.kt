@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
                 val lastCapturedPhoto  by viewModel.lastCapturedPhoto.collectAsStateWithLifecycle()
                 val cameraPreview      by viewModel.cameraPreview.collectAsStateWithLifecycle()
                 val isProcessing       by viewModel.isProcessing.collectAsStateWithLifecycle()
+                val assistantState     by viewModel.assistantState.collectAsStateWithLifecycle()
                 val lastAnalysisResult by viewModel.lastAnalysisResult.collectAsStateWithLifecycle()
 
                 MainScreen(
@@ -84,8 +85,11 @@ class MainActivity : ComponentActivity() {
                     lastCapturedPhoto  = lastCapturedPhoto,
                     cameraPreview      = cameraPreview,
                     lastAnalysisResult = lastAnalysisResult,
+                    assistantState     = assistantState,
                     onMicPress         = viewModel::startListening,
                     onMicRelease       = viewModel::stopListening,
+                    onActivateAssistant = viewModel::activateAssistant,
+                    onDeactivateAssistant = viewModel::deactivateAssistant,
                 )
             }
         }

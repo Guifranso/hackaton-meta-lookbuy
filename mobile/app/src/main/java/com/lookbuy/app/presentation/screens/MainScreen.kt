@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lookbuy.app.ai_engine.vision.ProductAnalysisResult
 import com.lookbuy.app.meta_wearables.audio.HfpState
+import com.lookbuy.app.presentation.viewmodels.AssistantState
 import com.lookbuy.app.ui.theme.LookBuyTheme
 import com.meta.wearable.dat.camera.types.StreamState
 import com.meta.wearable.dat.core.session.DeviceSessionState
@@ -103,9 +105,12 @@ fun MainScreen(
     lastCapturedPhoto: Bitmap?,
     cameraPreview: Bitmap?,
     lastAnalysisResult: ProductAnalysisResult?,
+    assistantState: AssistantState,
     sessionError: String? = null,
     onMicPress: () -> Unit,
     onMicRelease: () -> Unit,
+    onActivateAssistant: () -> Unit,
+    onDeactivateAssistant: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -249,16 +254,32 @@ fun MainScreen(
                 // O mic fica habilitado assim que o registro Meta AI for confirmado.
                 // A câmera só é necessária para enviar a foto; a voz sempre funciona.
                 val micEnabled = registrationState == RegistrationState.REGISTERED
+                Button(
+                    enabled = micEnabled,
+                    onClick = {
+                        if (assistantState == AssistantState.INACTIVE) onActivateAssistant()
+                        else onDeactivateAssistant()
+                    },
+                ) {
+                    Text(
+                        if (assistantState == AssistantState.INACTIVE) "Ativar assistente"
+                        else "Encerrar assistente",
+                    )
+                }
                 MicButton(
                     isListening  = isListening,
                     isSpeaking   = isSpeaking,
-                    enabled      = micEnabled,
+                    enabled      = micEnabled && assistantState != AssistantState.INACTIVE,
                     onPress      = onMicPress,
                     onRelease    = onMicRelease,
                 )
                 Text(
                     text = when {
                         !micEnabled              -> "Aguardando registro Meta AI..."
+                        assistantState == AssistantState.LISTENING_FOR_WAKE_WORD ->
+                            "Assistente ativo. MVP: segure o microfone para falar."
+                        assistantState == AssistantState.INACTIVE ->
+                            "Ative o assistente para usar o microfone"
                         isListening              -> "Solte para processar"
                         streamState == StreamState.STREAMING -> if (hfpState == HfpState.ACTIVE)
                             "Segure para falar (Áudio via Bluetooth)"
@@ -669,8 +690,11 @@ private fun MainScreenReadyPreview() {
             lastCapturedPhoto = null,
             cameraPreview = null,
             lastAnalysisResult = null,
+            assistantState = AssistantState.INACTIVE,
             onMicPress        = {},
             onMicRelease      = {},
+            onActivateAssistant = {},
+            onDeactivateAssistant = {},
         )
     }
 }

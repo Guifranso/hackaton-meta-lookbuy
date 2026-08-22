@@ -1,14 +1,17 @@
 flowchart TD
     %% SUBGRAPH 1: SMART GLASSES
     subgraph Glasses[" Smart Glasses (Hardware)"]
-        Start([Standby]) --> VoiceTrigger[Gatilho de Voz:\n'LookBuy, quanto custa isto?']
-        VoiceTrigger --> CaptureFrame[Captura Frame Pontual FPV]
+        Start([Óculos conectados])
+        CaptureFrame[Comando reconhecido:\nCaptura Frame Pontual FPV]
         PlayAudioOut[Reprodução de Áudio nos Alto-falantes] --> DiscardLocalMem[Descarte de Buffer Local]
         DiscardLocalMem --> EndState([Standby])
     end
 
     %% SUBGRAPH 2: COMPANION APP (LIGHTWEIGHT / ON-DEVICE)
     subgraph CompanionApp[" Companion App (Mobile / On-Device)"]
+        WakeService[Foreground Service:\nwake word + VAD local]
+        VoiceTrigger[Wake word local:\n'LookBuy']
+        WakeService --> VoiceTrigger
         CaptureFrame -->|BLE / Wi-Fi Direct| OffloadToApp[Recebe Frame Comprimido]
 
         OffloadToApp --> PrivacyFilter["Filtro de Privacidade Local (NPU/GPU)\n(Detecção e Blur de Rostos de Terceiros)"]
@@ -19,7 +22,7 @@ flowchart TD
         LocalTTS_Fail["TTS Nativo Local\n('Não consegui identificar...')"] --> PlayAudioOut
         LocalTTS_Ask["TTS Nativo Local\n('Pergunta de Clarificação')"] --> PlayAudioOut
 
-        MicCapture[Microfone captura resposta] --> OnDeviceSTT["STT Local (Nativo / Whisper-Tiny)"]
+        MicCapture[Microfone captura comando ou resposta] --> OnDeviceSTT["STT Local (Whisper-Tiny)"]
         OnDeviceSTT -->|Texto Transcrito| SendVoiceClarification[Envia Resposta ao Backend]
 
         LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"] --> PlayAudioOut
@@ -54,3 +57,6 @@ flowchart TD
         FormatFallback --> SendSuccessPayload
         SendSuccessPayload --> LocalTTS_Success
     end
+
+    Start --> WakeService
+    VoiceTrigger --> CaptureFrame

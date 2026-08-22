@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">LookBuy</string>
     <string name="permission_rationale">LookBuy uses the camera to identify products and the microphone for hands-free commands.</string>
+    <string name="assistant_notification_channel">Assistente LookBuy</string>
+    <string name="assistant_notification_title">LookBuy ativo</string>
+    <string name="assistant_notification_text">Preparado para comandos de voz.</string>
 </resources>

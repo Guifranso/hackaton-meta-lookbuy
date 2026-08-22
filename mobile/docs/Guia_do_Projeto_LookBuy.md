@@ -15,6 +15,7 @@ No desenvolvimento sem os óculos físicos, o projeto usa o **Meta Device Access
 | Arquitetura | MVVM com camadas `presentation`, `domain`, `data` e `ai_engine` |
 | Dispositivo simulado | Meta DAT 0.8.0 + Mock Device Kit |
 | Voz | `SpeechRecognizer` do Android (STT) e `TextToSpeech` (TTS) |
+| Assistente em segundo plano | Serviço em primeiro plano ativado explicitamente pelo usuário |
 | Visão | `VisionClient` com resposta mockada, pronto para trocar por um VLM real |
 | Concorrência | Kotlin Coroutines e Flow/StateFlow |
 
@@ -89,7 +90,10 @@ App abre
   → inicia Stream de vídeo DAT
   → converte frames YUV para a prévia da tela
 
-Usuário segura o microfone e fala
+Usuário ativa o assistente no celular
+  → serviço em primeiro plano mantém o app elegível para áudio com a tela apagada
+  → no desenho final, wake word + VAD locais aguardam "LookBuy"
+  → no MVP atual, o usuário segura o microfone e fala
   → STT transforma voz em texto
   → tenta capturar foto DAT
   → se o MDK não fornecer uma foto, usa o último frame válido da prévia
@@ -131,7 +135,7 @@ Declaradas no `AndroidManifest.xml` e solicitadas em runtime por `MainActivity.k
 3. Execute a variante `debug` em um celular Android.
 4. Espere os cartões de Registro Meta AI, Sessão DAT e Câmera DAT ficarem ativos.
 5. Verifique a prévia: ela deve mostrar a câmera traseira do celular.
-6. Segure o botão de microfone, faça uma pergunta sobre o objeto enquadrado e solte.
+6. Toque em **Ativar assistente** para iniciar o serviço de áudio. No MVP, segure o botão de microfone, faça uma pergunta sobre o objeto enquadrado e solte.
 
 Pelo terminal PowerShell, o APK debug pode ser gerado com:
 
@@ -156,13 +160,14 @@ ou pela variável de ambiente `GITHUB_TOKEN`.
 
 ## Situação atual e próximos passos
 
-O app já demonstra o fluxo completo de interface, câmera simulada, fala, resposta e resultado visual. A análise de produto ainda é mockada; para produção, os próximos passos são:
+O app já demonstra o fluxo completo de interface, câmera simulada, fala, resposta e resultado visual. A análise de produto ainda é mockada; a ativação explícita cria um serviço em primeiro plano, mas a wake word/VAD ainda não foram integradas. Para produção, os próximos passos são:
 
 1. Substituir `VisionClient` por uma API/VLM real.
 2. Implementar consulta de preços nos repositórios de `data/`.
 3. Proteger chaves de API no backend, nunca dentro do APK.
 4. Configurar credenciais reais do Meta Developer Portal para builds de produção.
 5. Testar com óculos Meta reais e um dispositivo HFP conectado.
+6. Integrar wake word, VAD e Whisper Tiny locais no serviço para substituir o push-to-talk.
 
 ## Materiais de apoio
 

@@ -6,8 +6,11 @@ sequenceDiagram
     participant VLM as Pipeline VLM & OCR
     participant Scraper as Worker de Preços
 
-    %% 1. Início de Sessão e Conexão
-    User->>App: Gatilho de Voz + Frame FPV
+    %% 1. Ativação e início de sessão
+    User->>App: Abre o LookBuy e ativa o assistente
+    Note over App: Foreground Service inicia wake word + VAD no celular
+    User->>App: Diz "LookBuy, quanto custa isto?"
+    Note over App: Wake word e STT locais; câmera só é ativada após comando válido
     Note over App: Aplica Filtro de Privacidade Local (Blur em rostos)
     App->>WS: 1. Abre Conexão WebSocket (Session Handshake)
     WS-->>App: Conexão Estabelecida (ACK)
@@ -28,7 +31,7 @@ sequenceDiagram
         VLM-->>WS: Ambiguidade detectada
         WS-->>App: WS Message: { status: "clarification_needed", question: "É o pacote de 250g ou 500g?" }
         App->>User: TTS Nativo Local (Pergunta)
-        User->>App: Resposta por Voz
+        User->>App: Resposta por voz (sem repetir "LookBuy")
         Note over App: STT Local (Transcreve áudio -> texto)
         App->>WS: WS Message: { type: "clarification_response", answer: "250g" }
         WS->>Scraper: Busca Preço para entidade resolvida
