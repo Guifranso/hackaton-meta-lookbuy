@@ -20,11 +20,11 @@ flowchart TB
         OffloadToApp["Recebe Frame Comprimido"]
         PrivacyFilter["Filtro de Privacidade Local\n(ML Kit Face Detection + blur de rostos)"]
         SendToBackend["Dispara Requisição HTTP/WS"]
-        LocalTTS_Fail@{ label: "TTS Nativo Local\n('Não consegui identificar...')" }
-        LocalTTS_Ask@{ label: "TTS Nativo Local\n('Pergunta de Clarificação')" }
+        LocalTTS_Fail@{ label: "TTS Nativo Local\n(pausa openWakeWord/VAD)" }
+        LocalTTS_Ask@{ label: "TTS Nativo Local\n(pausa openWakeWord/VAD)\n('Pergunta de Clarificação')" }
         OnDeviceSTT["STT Local (Whisper Tiny)"]
         SendVoiceClarification["Envia Resposta ao Backend"]
-        LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"]
+        LocalTTS_Success["TTS Nativo Local\n(pausa openWakeWord/VAD)\n(Sintetiza Preço/Detalhes)"]
   end
  subgraph Backend["Backend (FastAPI / GPUs & Workers)"]
         VLMInference["Pipeline de Visão & OCR\n(VLM / OCR de Rótulo e Embalagem)"]
@@ -221,5 +221,11 @@ INATIVO
 ```
 
 Em `AGUARDANDO_CLARIFICAÇÃO`, a resposta seguinte é aceita sem repetir “LookBuy”: o app aguarda até 8 s pelo início da fala, o WebRTC VAD encerra após 2,5 s de silêncio e repete a pergunta uma vez se não houver resposta compreensível. Encerrada a conversa ou expirado o tempo, volta a exigir a wake word. Esses estados são independentes da `DeviceSession` do DAT.
+
+Durante qualquer fala do `TextToSpeech`, o app pausa openWakeWord e WebRTC VAD para não interpretar a própria resposta. Ao receber o evento de término do TTS, retoma a escuta: em uma clarificação, abre a janela de resposta; nos demais casos, volta a `ESCUTANDO_WAKE_WORD`.
+
+### 7.1 Privacidade, retenção e logs
+
+O `PrivacyFilter` normaliza a imagem e aplica blur local de rostos com ML Kit antes de qualquer envio. A imagem filtrada trafega exclusivamente por HTTPS ou WSS, conforme o protocolo do backend, e é processada em memória e descartada após a inferência. O backend não retém imagem, áudio, transcrição ou localização precisa. Apenas logs técnicos mínimos — data/hora, status, latência e tipo de erro — são mantidos por até 7 dias, sem conteúdo sensível.
 
 > **Estado do MVP:** o app já possui ativação explícita e serviço em primeiro plano, mas ainda usa push-to-talk com `SpeechRecognizer`. openWakeWord, WebRTC VAD, Whisper Tiny e ML Kit Face Detection são as próximas integrações para a experiência contínua e o filtro de privacidade.

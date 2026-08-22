@@ -13,6 +13,7 @@ sequenceDiagram
     Note over App: Após “LookBuy”, WebRTC VAD aguarda até 5 s pelo início e encerra após 2,5 s de silêncio
     Note over App: Whisper Tiny local transcreve comando de até 12 s; câmera só é ativada após comando válido
     Note over App: ML Kit Face Detection detecta rostos para blur local antes do envio
+    Note over App: Durante TTS, openWakeWord e WebRTC VAD ficam pausados; a escuta só retorna após o término da fala
     App->>WS: 1. Abre Conexão WebSocket (Session Handshake)
     WS-->>App: Conexão Estabelecida (ACK)
 

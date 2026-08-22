@@ -21,14 +21,14 @@ flowchart TD
         PrivacyFilter -->|Payload Seguro: Imagem + Meta| SendToBackend[Dispara Requisição HTTP/WS]
 
         %% Interações de Voz On-Device
-        LocalTTS_Fail["TTS Nativo Local\n('Não consegui identificar...')"] --> PlayAudioOut
-        LocalTTS_Ask["TTS Nativo Local\n('Pergunta de Clarificação')"] --> PlayAudioOut
+        LocalTTS_Fail["TTS Nativo Local\n(pausa openWakeWord/VAD)"] --> PlayAudioOut
+        LocalTTS_Ask["TTS Nativo Local\n(pausa openWakeWord/VAD)\n('Pergunta de Clarificação')"] --> PlayAudioOut
 
         MicCapture[Microfone captura resposta] --> ClarificationVad[WebRTC VAD local:\naté 8 s para responder;\nencerra após 2,5 s de silêncio]
         ClarificationVad --> ClarificationStt["STT Local (Whisper Tiny)"]
         ClarificationStt -->|Texto transcrito| SendVoiceClarification[Envia Resposta ao Backend]
 
-        LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"] --> PlayAudioOut
+        LocalTTS_Success["TTS Nativo Local\n(pausa openWakeWord/VAD)\n(Sintetiza Preço/Detalhes)"] --> PlayAudioOut
     end
 
     %% SUBGRAPH 3: BACKEND (FASTAPI / HEAVY COMPUTE)

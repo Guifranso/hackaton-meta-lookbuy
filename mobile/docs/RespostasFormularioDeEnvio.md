@@ -27,7 +27,7 @@ Pessoas que querem avaliar melhor um produto antes de decidir comprá-lo, princi
 3. O `DatCameraClient` captura uma foto; quando uma foto dedicada não estiver disponível, usa o último frame YUV válido da prévia como fallback.
 4. Antes do envio ao backend, a `PrivacyFilter` normaliza a rotação e usa ML Kit Face Detection para aplicar blur local de rostos; somente o payload seguro segue para VLM/OCR e consulta de preços.
 5. Com identificação de alta confiança, o backend associa marca, produto e embalagem à busca de preço regional.
-6. O `ProcessProductLookUseCase` atualiza a interface com nome e preço estimado e o `TextToSpeech` responde em PT-BR: “Encontrei… por aproximadamente…”.
+6. O `ProcessProductLookUseCase` atualiza a interface com nome e preço estimado e o `TextToSpeech` responde em PT-BR: “Encontrei… por aproximadamente…”. Durante o TTS, openWakeWord e WebRTC VAD ficam pausados.
 7. O áudio é roteado por HFP/SCO para fones ou óculos Bluetooth; sem acessório, o Android usa microfone e alto-falante do celular. Em uma clarificação, a pessoa responde sem repetir a wake word: há até 8 s de espera e uma repetição da pergunta; depois disso, o assistente volta a aguardar “LookBuy”.
 
 ### A4 — Walkthrough de exceção (quando dá errado) *
@@ -126,11 +126,11 @@ HFP/SCO leva o áudio ao celular. openWakeWord, WebRTC VAD e Whisper Tiny transc
 
 ### A7.3 — Output por áudio *
 
-`TextToSpeech` nativo em PT-BR fala processamento, erro e resultado. O `DatAudioClient` prioriza HFP/SCO e usa o áudio do celular como fallback.
+`TextToSpeech` nativo em PT-BR fala processamento, erro e resultado; pausa openWakeWord/VAD durante a fala. HFP/SCO é priorizado, com fallback no celular.
 
 ### A7.4 — Privacidade e dados *
 
-ML Kit detecta rostos no celular; o app aplica blur antes do envio e descarta o frame após a inferência. O backend recebe só o necessário.
+ML Kit borra rostos no celular. A imagem viaja por HTTPS/WSS e é descartada após inferência; logs técnicos sem imagem, áudio ou transcrição ficam por 7 dias.
 
 ### A7.5 — Eficiência de bateria *
 
