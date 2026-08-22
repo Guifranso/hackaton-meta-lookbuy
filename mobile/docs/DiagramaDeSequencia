@@ -8,10 +8,11 @@ sequenceDiagram
 
     %% 1. Ativação e início de sessão
     User->>App: Abre o LookBuy e ativa o assistente
-    Note over App: Foreground Service inicia wake word + VAD no celular
+    Note over App: Foreground Service inicia openWakeWord local para “LookBuy”
     User->>App: Diz "LookBuy, quanto custa isto?"
-    Note over App: Wake word e STT locais; câmera só é ativada após comando válido
-    Note over App: Aplica Filtro de Privacidade Local (Blur em rostos)
+    Note over App: Após “LookBuy”, WebRTC VAD aguarda até 5 s pelo início e encerra após 2,5 s de silêncio
+    Note over App: Whisper Tiny local transcreve comando de até 12 s; câmera só é ativada após comando válido
+    Note over App: ML Kit Face Detection detecta rostos para blur local antes do envio
     App->>WS: 1. Abre Conexão WebSocket (Session Handshake)
     WS-->>App: Conexão Estabelecida (ACK)
 
@@ -32,7 +33,7 @@ sequenceDiagram
         WS-->>App: WS Message: { status: "clarification_needed", question: "É o pacote de 250g ou 500g?" }
         App->>User: TTS Nativo Local (Pergunta)
         User->>App: Resposta por voz (sem repetir "LookBuy")
-        Note over App: STT Local (Transcreve áudio -> texto)
+        Note over App: Aguarda até 8 s; WebRTC VAD encerra após 2,5 s de silêncio e Whisper Tiny transcreve
         App->>WS: WS Message: { type: "clarification_response", answer: "250g" }
         WS->>Scraper: Busca Preço para entidade resolvida
         Scraper-->>WS: Preço encontrado

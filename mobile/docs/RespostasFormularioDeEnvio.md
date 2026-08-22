@@ -23,12 +23,12 @@ Pessoas que querem avaliar melhor um produto antes de decidir comprá-lo, princi
 ### A3 — Walkthrough de interação (caminho principal) *
 
 1. A pessoa abre o companion app e toca em **Ativar assistente**. O app inicia um serviço em primeiro plano, com notificação persistente e uso explícito do microfone.
-2. A wake word local “LookBuy” e o VAD rodam no celular; após “LookBuy, quanto custa isto?”, o comando é transcrito e o app aciona a câmera DAT.
+2. O openWakeWord local aguarda “LookBuy”. Após a ativação, o WebRTC VAD aguarda até 5 s pelo início da fala e encerra após 2,5 s de silêncio; o Whisper Tiny transcreve localmente o comando, de até 12 s, antes de acionar a câmera DAT.
 3. O `DatCameraClient` captura uma foto; quando uma foto dedicada não estiver disponível, usa o último frame YUV válido da prévia como fallback.
-4. Antes do envio ao backend, a camada `PrivacyFilter` normaliza a rotação do frame e aplica blur local de rostos; somente o payload seguro segue para VLM/OCR e consulta de preços.
+4. Antes do envio ao backend, a `PrivacyFilter` normaliza a rotação e usa ML Kit Face Detection para aplicar blur local de rostos; somente o payload seguro segue para VLM/OCR e consulta de preços.
 5. Com identificação de alta confiança, o backend associa marca, produto e embalagem à busca de preço regional.
 6. O `ProcessProductLookUseCase` atualiza a interface com nome e preço estimado e o `TextToSpeech` responde em PT-BR: “Encontrei… por aproximadamente…”.
-7. O áudio é roteado por HFP/SCO para fones ou óculos Bluetooth; sem acessório, o Android usa microfone e alto-falante do celular. Em uma pergunta de clarificação, a pessoa pode responder diretamente durante a janela de contexto; depois disso, o assistente volta a aguardar “LookBuy”.
+7. O áudio é roteado por HFP/SCO para fones ou óculos Bluetooth; sem acessório, o Android usa microfone e alto-falante do celular. Em uma clarificação, a pessoa responde sem repetir a wake word: há até 8 s de espera e uma repetição da pergunta; depois disso, o assistente volta a aguardar “LookBuy”.
 
 ### A4 — Walkthrough de exceção (quando dá errado) *
 
@@ -50,15 +50,15 @@ Podemos perder um frame desfocado. Mitigamos com nova captura por voz e instruç
 
 #### A5[2].a — A decisão *
 
-Usamos todo processamento complexo concentrado ao backend.
+Mantemos no app companion as funções de interação, comunicação e apresentação dos resultados, enquanto centralizamos no backend o processamento complexo como análise visual, identificação e verificação de preços.
 
 #### A5[2].b — Por que esse lado *
 
-A bateria limitada dos óculos e a capacidade limitada de processamento disponível no contexto do app companion
+Óculos e app companion têm limitações para executar essas tarefas localmente com confiabilidade.
 
 #### A5[2].c — O que isso custou *
 
-Há dependência de rede e latência. Sem conexão, informamos a indisponibilidade e não afirmamos um preço não verificado.
+A consulta de resultados depende de conectividade e pode sofrer latência. Sem conexão, o app informa a indisponibilidade e não apresenta preços não verificados.
 
 #### A5[3].a — A decisão *
 
@@ -86,15 +86,15 @@ O frame pode estar menos nítido que uma foto dedicada. Exibimos a prévia e per
 
 #### A5[5].a — A decisão (opcional)
 
-Usamos TTS nativo e STT embarcado com Whisper Tiny, wake word e VAD locais.
+Usamos openWakeWord, WebRTC VAD e Whisper Tiny locais em vez de STT contínuo.
 
 #### A5[5].b — Por que esse lado (opcional)
 
-O TTS nativo entrega resposta falada de baixa latência e o STT embarcado mantém o áudio no companion app. A cascata wake word → VAD → Whisper Tiny reduz processamento e transmissão de dados ao ativar a transcrição completa apenas quando necessário.
+O openWakeWord mantém escuta leve; WebRTC VAD e Whisper Tiny só processam um comando após “LookBuy”. TTS nativo entrega a resposta com baixa latência.
 
 #### A5[5].c — O que isso custou (opcional)
 
-O modelo embarcado aumenta o tamanho do aplicativo e consome processamento e bateria do celular. Mitigamos isso com VAD, modelo compacto e captura de câmera somente após um comando válido.
+O modelo aumenta o APK e consome bateria do celular. Mitigamos com WebRTC VAD, limite de 12 s por comando e câmera acionada só após transcrição válida.
 
 ## Página 7 — Âncora de originalidade
 
@@ -122,7 +122,7 @@ O fluxo usa VLM/OCR para identificar produto, marca e embalagem, além de LLM pa
 
 ### A7.2 — Câmera ou microfone (canal de entrada) *
 
-O microfone dos óculos chega ao companion app pelo perfil Bluetooth HFP/SCO; wake word, VAD e STT são processados localmente no celular. A câmera DAT captura o item somente após um comando válido.
+HFP/SCO leva o áudio ao celular. openWakeWord, WebRTC VAD e Whisper Tiny transcrevem comandos; a câmera DAT só captura após comando válido.
 
 ### A7.3 — Output por áudio *
 
@@ -130,11 +130,11 @@ O microfone dos óculos chega ao companion app pelo perfil Bluetooth HFP/SCO; wa
 
 ### A7.4 — Privacidade e dados *
 
-Cada frame é temporário, recebe blur local de rostos antes do envio e é descartado após a inferência. O backend recebe somente o payload necessário para identificar o produto e consultar as informações solicitadas.
+ML Kit detecta rostos no celular; o app aplica blur antes do envio e descarta o frame após a inferência. O backend recebe só o necessário.
 
 ### A7.5 — Eficiência de bateria *
 
-Os óculos são usados para capturas pontuais e áudio. A escuta, VAD e processamento de voz da experiência final ficam no companion app; câmera, rede e inferência visual só são acionadas após um comando válido. Isso reduz trabalho contínuo nos óculos e evita streaming de vídeo.
+Óculos fazem captura pontual e áudio. No celular, openWakeWord, WebRTC VAD e Whisper só ativam câmera, rede e IA visual após comando válido; não há streaming contínuo.
 
 ## Página 9 — Seção B: Diagrama de arquitetura
 

@@ -15,6 +15,8 @@ No desenvolvimento sem os óculos físicos, o projeto usa o **Meta Device Access
 | Arquitetura | MVVM com camadas `presentation`, `domain`, `data` e `ai_engine` |
 | Dispositivo simulado | Meta DAT 0.8.0 + Mock Device Kit |
 | Voz | `SpeechRecognizer` do Android (STT) e `TextToSpeech` (TTS) |
+| Voz — arquitetura-alvo | openWakeWord (“LookBuy”) + WebRTC VAD + Whisper Tiny; TTS nativo |
+| Privacidade — arquitetura-alvo | ML Kit Face Detection + blur local antes do envio |
 | Assistente em segundo plano | Serviço em primeiro plano ativado explicitamente pelo usuário |
 | Visão | `VisionClient` com resposta mockada, pronto para trocar por um VLM real |
 | Concorrência | Kotlin Coroutines e Flow/StateFlow |
@@ -65,7 +67,7 @@ mobile/
 - `speech/SttClient.kt`: transforma a fala em texto usando o reconhecedor de voz do Android.
 - `speech/TtsClient.kt`: fala mensagens de processamento e o resultado para o usuário.
 - `vision/VisionClient.kt`: ponto de integração com visão. Hoje retorna um resultado mockado após 2 segundos; pode ser substituído por Gemini, OpenAI ou backend próprio.
-- `vision/PrivacyFilter.kt`: ponto reservado para filtros de privacidade, como detecção de rostos.
+- `vision/PrivacyFilter.kt`: ponto de integração do ML Kit Face Detection e blur local de rostos antes do envio.
 
 ### `domain/`
 
@@ -92,7 +94,9 @@ App abre
 
 Usuário ativa o assistente no celular
   → serviço em primeiro plano mantém o app elegível para áudio com a tela apagada
-  → no desenho final, wake word + VAD locais aguardam "LookBuy"
+  → no desenho final, openWakeWord com modelo personalizado aguarda "LookBuy"
+  → após a ativação, WebRTC VAD aguarda até 5 s pelo início da fala e encerra após 2,5 s de silêncio
+  → Whisper Tiny transcreve localmente comandos de até 12 s
   → no MVP atual, o usuário segura o microfone e fala
   → STT transforma voz em texto
   → tenta capturar foto DAT
@@ -160,14 +164,15 @@ ou pela variável de ambiente `GITHUB_TOKEN`.
 
 ## Situação atual e próximos passos
 
-O app já demonstra o fluxo completo de interface, câmera simulada, fala, resposta e resultado visual. A análise de produto ainda é mockada; a ativação explícita cria um serviço em primeiro plano, mas a wake word/VAD ainda não foram integradas. Para produção, os próximos passos são:
+O app já demonstra o fluxo completo de interface, câmera simulada, fala, resposta e resultado visual. A análise de produto ainda é mockada; a ativação explícita cria um serviço em primeiro plano, mas openWakeWord, WebRTC VAD, Whisper Tiny e ML Kit Face Detection ainda não foram integrados. Para produção, os próximos passos são:
 
 1. Substituir `VisionClient` por uma API/VLM real.
 2. Implementar consulta de preços nos repositórios de `data/`.
 3. Proteger chaves de API no backend, nunca dentro do APK.
 4. Configurar credenciais reais do Meta Developer Portal para builds de produção.
 5. Testar com óculos Meta reais e um dispositivo HFP conectado.
-6. Integrar wake word, VAD e Whisper Tiny locais no serviço para substituir o push-to-talk.
+6. Integrar openWakeWord com modelo personalizado “LookBuy”, WebRTC VAD e Whisper Tiny no serviço para substituir o push-to-talk, com 5 s para início da fala, 2,5 s de silêncio e comando máximo de 12 s.
+7. Integrar ML Kit Face Detection ao `PrivacyFilter` e aplicar blur antes do upload.
 
 ## Materiais de apoio
 

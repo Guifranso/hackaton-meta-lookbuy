@@ -9,12 +9,14 @@ flowchart TD
 
     %% SUBGRAPH 2: COMPANION APP (LIGHTWEIGHT / ON-DEVICE)
     subgraph CompanionApp[" Companion App (Mobile / On-Device)"]
-        WakeService[Foreground Service:\nwake word + VAD local]
-        VoiceTrigger[Wake word local:\n'LookBuy']
+        WakeService[Foreground Service:\nescuta local]
+        VoiceTrigger[openWakeWord local:\nmodelo personalizado 'LookBuy']
+        CommandVad[WebRTC VAD local:\naté 5 s para iniciar;\nencerra após 2,5 s de silêncio]
+        CommandStt[STT local:\nWhisper Tiny, até 12 s]
         WakeService --> VoiceTrigger
-        CaptureFrame -->|BLE / Wi-Fi Direct| OffloadToApp[Recebe Frame Comprimido]
+        CaptureFrame -->|Meta DAT| OffloadToApp[Recebe Frame Comprimido]
 
-        OffloadToApp --> PrivacyFilter["Filtro de Privacidade Local (NPU/GPU)\n(Detecção e Blur de Rostos de Terceiros)"]
+        OffloadToApp --> PrivacyFilter["Filtro de Privacidade Local\n(ML Kit Face Detection + blur de rostos)"]
 
         PrivacyFilter -->|Payload Seguro: Imagem + Meta| SendToBackend[Dispara Requisição HTTP/WS]
 
@@ -22,8 +24,9 @@ flowchart TD
         LocalTTS_Fail["TTS Nativo Local\n('Não consegui identificar...')"] --> PlayAudioOut
         LocalTTS_Ask["TTS Nativo Local\n('Pergunta de Clarificação')"] --> PlayAudioOut
 
-        MicCapture[Microfone captura comando ou resposta] --> OnDeviceSTT["STT Local (Whisper-Tiny)"]
-        OnDeviceSTT -->|Texto Transcrito| SendVoiceClarification[Envia Resposta ao Backend]
+        MicCapture[Microfone captura resposta] --> ClarificationVad[WebRTC VAD local:\naté 8 s para responder;\nencerra após 2,5 s de silêncio]
+        ClarificationVad --> ClarificationStt["STT Local (Whisper Tiny)"]
+        ClarificationStt -->|Texto transcrito| SendVoiceClarification[Envia Resposta ao Backend]
 
         LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"] --> PlayAudioOut
     end
@@ -59,4 +62,6 @@ flowchart TD
     end
 
     Start --> WakeService
-    VoiceTrigger --> CaptureFrame
+    VoiceTrigger --> CommandVad
+    CommandVad --> CommandStt
+    CommandStt -->|Comando válido| CaptureFrame

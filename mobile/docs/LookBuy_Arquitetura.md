@@ -7,7 +7,7 @@ Este documento serve como o **Plano de Arquitetura e Contexto Base** para o dese
 ```mermaid
 flowchart TB
  subgraph Glasses["Smart Glasses (Hardware)"]
-        VoiceTrigger@{ label: "Wake word local no celular:\n'LookBuy' (assistente já ativado)" }
+        VoiceTrigger@{ label: "openWakeWord local:\nmodelo personalizado 'LookBuy'" }
         Start(["Standby"])
         CaptureFrame["Captura Frame Pontual FPV"]
         MicCapture["Microfone captura resposta"]
@@ -18,11 +18,11 @@ flowchart TB
   end
  subgraph CompanionApp["Companion App (Mobile / On-Device)"]
         OffloadToApp["Recebe Frame Comprimido"]
-        PrivacyFilter["Filtro de Privacidade Local (NPU/GPU)\n(Detecção e Blur de Rostos de Terceiros)"]
+        PrivacyFilter["Filtro de Privacidade Local\n(ML Kit Face Detection + blur de rostos)"]
         SendToBackend["Dispara Requisição HTTP/WS"]
         LocalTTS_Fail@{ label: "TTS Nativo Local\n('Não consegui identificar...')" }
         LocalTTS_Ask@{ label: "TTS Nativo Local\n('Pergunta de Clarificação')" }
-        OnDeviceSTT["STT Local (Nativo / Whisper-Tiny)"]
+        OnDeviceSTT["STT Local (Whisper Tiny)"]
         SendVoiceClarification["Envia Resposta ao Backend"]
         LocalTTS_Success["TTS Nativo Local\n(Sintetiza Preço/Detalhes)"]
   end
@@ -89,7 +89,7 @@ Esta arquitetura atende ao edital combinando processamento na nuvem com processa
 * **Linguagem & UI:** Kotlin, Jetpack Compose.
 * **Arquitetura:** Clean Architecture + MVVM, Kotlin Coroutines & Flow [cite: 3].
 * **Rede:** Ktor ou OkHttp + Retrofit (para WebSocket ou HTTP com o Backend).
-* **IA On-Device (Leve):** ML Kit ou MediaPipe (apenas para o Filtro de Privacidade Local) e Whisper-Tiny/Vosk (para STT).
+* **IA On-Device:** openWakeWord com modelo personalizado “LookBuy”, WebRTC VAD, Whisper Tiny para STT e ML Kit Face Detection para detectar rostos antes do blur.
 * **SDK Meta DAT [cite: 3]:** `mwdat-core:0.8.0`, `mwdat-camera:0.8.0`, `mwdat-mockdevice:0.8.0`.
 
 **Backend (Servidor - Escopo Separado):**
@@ -196,10 +196,10 @@ Para o Agente de IA, siga esta ordem de implementação:
   * Parear mock, `powerOn()`, `unfold()`, `don()` e configurar a câmera traseira/feed H.265; expor os `StateFlow`s reais de registro e sessão para UI [cite: 3].
 * **Fase 2: Integração de Áudio e Voz:**
   * Criar `DatAudioClient` com suporte a `TYPE_BLUETOOTH_SCO` e fallback para áudio do celular.
-  * Implementar primeiro `SpeechRecognizer` nativo (com preferência offline) e `TextToSpeech` para validar o ciclo; evoluir para Whisper tiny/Vosk e Piper se a demonstração precisar comprovar IA de voz totalmente local.
+   * Integrar openWakeWord com modelo personalizado “LookBuy”, WebRTC VAD e Whisper Tiny; manter `TextToSpeech` nativo para a resposta. Até essa integração, o protótipo usa `SpeechRecognizer` para desenvolvimento.
 * **Fase 3: Visão Local e Conexão Backend:**
   * Configurar `DatCameraClient` para capturar fotos (`capturePhoto()`) resolvendo o problema da rotação de 90° do MDK [cite: 3].
-  * Implementar o `PrivacyFilter` (aplicando blur em rostos encontrados no frame antes da transmissão).
+   * Implementar o `PrivacyFilter` com ML Kit Face Detection, aplicando blur nos rostos encontrados antes da transmissão.
   * Criar a camada de Rede (`ApiService`) para enviar a imagem segura ao FastAPI e processar os retornos (Erro, Ambiguidade, Sucesso).
 * **Fase 4: Orquestração e UI:**
   * Conectar o fluxo: Disparo de Voz -> Foto -> Privacy Filter -> Backend -> TTS (Sucesso/Erro) ou STT de Resposta (Ambiguidade).
@@ -209,7 +209,7 @@ Para o Agente de IA, siga esta ordem de implementação:
 
 O DAT não expõe o wake word **"Hey Meta"**, nem um evento público do botão dos óculos para abrir um app de terceiros. Por isso, a primeira ativação é explícita: o usuário abre o LookBuy no celular e toca em **Ativar assistente**. Essa ação inicia um *foreground service* de microfone, com notificação persistente, para que o pipeline de voz continue com a tela apagada.
 
-Após essa ativação, o app companion recebe o áudio dos óculos por HFP. Uma wake word própria, processada localmente no celular, ativa o restante do pipeline. O desenho final usa uma cascata de baixo consumo: **wake word → VAD → Whisper Tiny → comando**. Câmera, VLM e consulta de preços continuam desligados até existir um comando válido.
+Após essa ativação, o app companion recebe o áudio dos óculos por HFP/SCO. O openWakeWord, com modelo personalizado para “LookBuy”, reconhece localmente a wake word e ativa o restante do pipeline. O desenho final usa a cascata de baixo consumo **openWakeWord → WebRTC VAD → Whisper Tiny → comando**, toda executada no celular: o WebRTC VAD aguarda até 5 s pelo início da fala, encerra após 2,5 s de silêncio e limita o comando a 12 s. Câmera, VLM e consulta de preços continuam desligados até existir um comando válido.
 
 ```text
 INATIVO
@@ -220,6 +220,6 @@ INATIVO
   → ESCUTANDO_WAKE_WORD
 ```
 
-Em `AGUARDANDO_CLARIFICAÇÃO`, a resposta seguinte do usuário é aceita sem repetir “LookBuy”, durante uma janela curta. Encerrada a conversa ou expirado o tempo, o app volta a exigir a wake word. Esses estados de conversa são independentes dos estados técnicos da `DeviceSession` do DAT.
+Em `AGUARDANDO_CLARIFICAÇÃO`, a resposta seguinte é aceita sem repetir “LookBuy”: o app aguarda até 8 s pelo início da fala, o WebRTC VAD encerra após 2,5 s de silêncio e repete a pergunta uma vez se não houver resposta compreensível. Encerrada a conversa ou expirado o tempo, volta a exigir a wake word. Esses estados são independentes da `DeviceSession` do DAT.
 
-> **Estado do MVP:** o app já possui ativação explícita e serviço em primeiro plano, mas ainda usa push-to-talk com `SpeechRecognizer`. Wake word, VAD e Whisper Tiny são a próxima integração para a experiência contínua.
+> **Estado do MVP:** o app já possui ativação explícita e serviço em primeiro plano, mas ainda usa push-to-talk com `SpeechRecognizer`. openWakeWord, WebRTC VAD, Whisper Tiny e ML Kit Face Detection são as próximas integrações para a experiência contínua e o filtro de privacidade.
