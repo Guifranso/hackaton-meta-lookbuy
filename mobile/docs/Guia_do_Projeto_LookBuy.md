@@ -16,7 +16,7 @@ No desenvolvimento sem os óculos físicos, o projeto usa o **Meta Device Access
 | Dispositivo simulado | Meta DAT 0.8.0 + Mock Device Kit |
 | Voz | `SpeechRecognizer` do Android (STT) e `TextToSpeech` (TTS) |
 | Voz — arquitetura-alvo | openWakeWord (“LookBuy”) + WebRTC VAD + Whisper Tiny; TTS nativo |
-| Privacidade — arquitetura-alvo | ML Kit Face Detection + blur local; HTTPS/WSS; imagem descartada após inferência |
+| Privacidade — arquitetura-alvo | ML Kit Face Detection + blur local; HTTPS; imagem descartada após inferência |
 | Assistente em segundo plano | Serviço em primeiro plano ativado explicitamente pelo usuário |
 | Visão | `VisionClient` com resposta mockada, pronto para trocar por um VLM real |
 | Concorrência | Kotlin Coroutines e Flow/StateFlow |
@@ -125,7 +125,7 @@ O cartão “Áudio HFP” fica vermelho quando não há um dispositivo Bluetoot
 
 ## Privacidade e logs — arquitetura-alvo
 
-A imagem passa por blur local de rostos antes de trafegar por HTTPS/WSS. O backend a processa em memória e a descarta após a inferência; não retém imagem, áudio, transcrição ou localização precisa. Logs técnicos de data/hora, status, latência e erro ficam por até 7 dias, sem conteúdo sensível.
+A imagem passa por blur local de rostos antes de trafegar por HTTPS. O backend a processa em memória e a descarta após a inferência; não retém imagem, áudio, transcrição ou localização precisa. Logs técnicos de data/hora, status, latência e erro ficam por até 7 dias, sem conteúdo sensível. Uma clarificação usa `lookupId` temporário, que preserva apenas o contexto textual mínimo.
 
 ## Permissões
 

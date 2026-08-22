@@ -130,7 +130,7 @@ HFP/SCO leva o áudio ao celular. openWakeWord, WebRTC VAD e Whisper Tiny transc
 
 ### A7.4 — Privacidade e dados *
 
-ML Kit borra rostos no celular. A imagem viaja por HTTPS/WSS e é descartada após inferência; logs técnicos sem imagem, áudio ou transcrição ficam por 7 dias.
+ML Kit borra rostos no celular. A imagem viaja por HTTPS e é descartada após inferência; logs técnicos sem imagem, áudio ou transcrição ficam por 7 dias.
 
 ### A7.5 — Eficiência de bateria *
 
@@ -142,13 +142,13 @@ ML Kit borra rostos no celular. A imagem viaja por HTTPS/WSS e é descartada ap�
 
 **[PREENCHER: exportar o diagrama Mermaid em PNG, JPG, SVG ou PDF e fazer upload.]**
 
-Fonte recomendada: o fluxo de arquitetura em [LookBuy_Arquitetura.md](LookBuy_Arquitetura.md) ou em [FluxoDeSequencia](FluxoDeSequencia).
+Fonte recomendada: [DiagramaArquiteturaCompleta.mmd](DiagramaArquiteturaCompleta.mmd).
 
 ### B2 — Código Mermaid *
 
 **[PREENCHER: exportar o código Mermaid em TXT, DOCX ou PDF e fazer upload.]**
 
-O código-fonte está em [LookBuy_Arquitetura.md](LookBuy_Arquitetura.md), [FluxoDeSequencia](FluxoDeSequencia) e [DiagramaDeSequencia](DiagramaDeSequencia). Ele contém os nós de IA/VLM, câmera, áudio, privacidade e eficiência de bateria.
+O código-fonte está em [DiagramaArquiteturaCompleta.mmd](DiagramaArquiteturaCompleta.mmd). Ele contém os nós de IA/VLM, câmera, áudio, privacidade, eficiência de bateria e chamadas HTTPS.
 
 ## Página 11 — Avaliação do Ideathon
 

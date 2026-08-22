@@ -1,0 +1,70 @@
+flowchart LR
+    User([Pessoa usuária])
+
+    subgraph Glasses["Óculos Meta / acessório Bluetooth"]
+        GlassesMic[Microfone]
+        GlassesCamera[Câmera FPV]
+        GlassesSpeaker[Alto-falantes]
+    end
+
+    subgraph Mobile["Companion app Android"]
+        Activate[Botão Ativar assistente]
+        Service[Foreground Service<br/>notificação persistente]
+        AudioRoute[DatAudioClient<br/>HFP/SCO ou fallback do celular]
+        Wake[openWakeWord<br/>modelo personalizado LookBuy]
+        VAD[WebRTC VAD<br/>5 s para iniciar · 2,5 s de silêncio]
+        Whisper[Whisper Tiny local<br/>comando de até 12 s]
+        Intent{Comando válido?}
+        Camera[DatCameraClient<br/>captura pontual]
+        Fallback[Fallback<br/>último frame YUV válido]
+        Privacy[PrivacyFilter<br/>rotação + ML Kit Face Detection + blur]
+        Api[ApiService<br/>HTTPS]
+        UseCase[ProcessProductLookUseCase<br/>atualiza UI]
+        TTS[TextToSpeech PT-BR]
+        Pause[Durante TTS:<br/>pausa openWakeWord e VAD]
+        Clarification[Janela de clarificação<br/>até 8 s · uma repetição]
+        ClarificationVAD[WebRTC VAD<br/>resposta de clarificação]
+        ClarificationSTT[Whisper Tiny local<br/>resposta de clarificação]
+    end
+
+    subgraph Backend["Backend FastAPI"]
+        Lookup[POST /lookups]
+        Session[Contexto textual temporário<br/>lookupId com expiração curta]
+        VLM[Pipeline VLM / OCR<br/>produto, marca, variante e embalagem]
+        Confidence{Identificação suficiente?}
+        Clarifier[Serviço de clarificação]
+        Price[PriceProvider<br/>API de preços a definir]
+        Result[Resposta estruturada<br/>sucesso · erro · clarificação]
+        Logs[Logs técnicos mínimos<br/>status, latência e erro · 7 dias]
+    end
+
+    User --> Activate --> Service
+    GlassesMic --> AudioRoute
+    Service --> AudioRoute --> Wake --> VAD --> Whisper --> Intent
+    Intent -->|sim| Camera
+    Intent -->|não| TTS
+    GlassesCamera --> Camera
+    Camera -->|foto| Privacy
+    Camera -->|sem foto dedicada| Fallback --> Privacy
+    Privacy -->|imagem filtrada| Api -->|POST HTTPS /lookups| Lookup
+    Lookup --> VLM --> Confidence
+    Lookup -. metadados técnicos .-> Logs
+    Confidence -->|alta confiança| Price --> Result
+    Confidence -->|ambiguidade| Clarifier --> Session --> Result
+    Confidence -->|baixa confiança| Result
+    Result -->|HTTPS: sucesso ou erro| Api --> UseCase --> TTS --> AudioRoute --> GlassesSpeaker
+    TTS -. pausa .-> Pause
+    Pause -. desativa temporariamente .-> Wake
+    Result -->|HTTPS: pergunta + lookupId| Api --> Clarification
+    Clarification --> ClarificationVAD --> ClarificationSTT --> Api
+    Api -->|POST HTTPS /lookups/:lookupId/clarifications| Session
+    Session --> Price
+
+    classDef local fill:#e8f1ff,stroke:#2f6feb,color:#111827;
+    classDef remote fill:#ecfdf3,stroke:#1f883d,color:#111827;
+    classDef hardware fill:#fff7e6,stroke:#bf8700,color:#111827;
+    classDef privacy fill:#fce7f3,stroke:#bf4b8a,color:#111827;
+    class Wake,VAD,Whisper,AudioRoute,Api,UseCase,TTS,Pause,Clarification,Service local;
+    class Lookup,Session,VLM,Confidence,Clarifier,Price,Result,Logs remote;
+    class GlassesMic,GlassesCamera,GlassesSpeaker hardware;
+    class Privacy privacy;

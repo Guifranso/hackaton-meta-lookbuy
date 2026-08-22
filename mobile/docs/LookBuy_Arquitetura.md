@@ -19,7 +19,7 @@ flowchart TB
  subgraph CompanionApp["Companion App (Mobile / On-Device)"]
         OffloadToApp["Recebe Frame Comprimido"]
         PrivacyFilter["Filtro de Privacidade Local\n(ML Kit Face Detection + blur de rostos)"]
-        SendToBackend["Dispara Requisição HTTP/WS"]
+        SendToBackend["POST HTTPS /lookups"]
         LocalTTS_Fail@{ label: "TTS Nativo Local\n(pausa openWakeWord/VAD)" }
         LocalTTS_Ask@{ label: "TTS Nativo Local\n(pausa openWakeWord/VAD)\n('Pergunta de Clarificação')" }
         OnDeviceSTT["STT Local (Whisper Tiny)"]
@@ -88,7 +88,7 @@ Esta arquitetura atende ao edital combinando processamento na nuvem com processa
 **Mobile (Android/Companion App):**
 * **Linguagem & UI:** Kotlin, Jetpack Compose.
 * **Arquitetura:** Clean Architecture + MVVM, Kotlin Coroutines & Flow [cite: 3].
-* **Rede:** Ktor ou OkHttp + Retrofit (para WebSocket ou HTTP com o Backend).
+* **Rede:** Retrofit/OkHttp com HTTPS; `POST /lookups` e `POST /lookups/{lookupId}/clarifications`.
 * **IA On-Device:** openWakeWord com modelo personalizado “LookBuy”, WebRTC VAD, Whisper Tiny para STT e ML Kit Face Detection para detectar rostos antes do blur.
 * **SDK Meta DAT [cite: 3]:** `mwdat-core:0.8.0`, `mwdat-camera:0.8.0`, `mwdat-mockdevice:0.8.0`.
 
@@ -143,7 +143,7 @@ com.lookbuy.app
 │   └── usecases/           # HandleBackendResponseUseCase, SendFrameToBackendUseCase
 ├── data/                   
 │   ├── repository/         # BackendRepositoryImpl
-│   └── remote/             # ApiService (WebSocket/HTTP Client para o FastAPI)
+│   └── remote/             # ApiService (cliente HTTPS para o FastAPI)
 ├── meta_wearables/         
 │   ├── session/            # DatSessionManager (Gerencia a sessão e o MockDeviceKit) [cite: 3]
 │   ├── camera/             # DatCameraClient (Gerencia streams e captura YUV) [cite: 3]
@@ -226,6 +226,6 @@ Durante qualquer fala do `TextToSpeech`, o app pausa openWakeWord e WebRTC VAD p
 
 ### 7.1 Privacidade, retenção e logs
 
-O `PrivacyFilter` normaliza a imagem e aplica blur local de rostos com ML Kit antes de qualquer envio. A imagem filtrada trafega exclusivamente por HTTPS ou WSS, conforme o protocolo do backend, e é processada em memória e descartada após a inferência. O backend não retém imagem, áudio, transcrição ou localização precisa. Apenas logs técnicos mínimos — data/hora, status, latência e tipo de erro — são mantidos por até 7 dias, sem conteúdo sensível.
+O `PrivacyFilter` normaliza a imagem e aplica blur local de rostos com ML Kit antes de qualquer envio. A imagem filtrada trafega exclusivamente por HTTPS, é processada em memória e descartada após a inferência. O backend não retém imagem, áudio, transcrição ou localização precisa. Apenas logs técnicos mínimos — data/hora, status, latência e tipo de erro — são mantidos por até 7 dias, sem conteúdo sensível. Quando houver clarificação, o backend preserva somente o contexto textual mínimo associado ao `lookupId`, com expiração curta, e nunca a imagem.
 
 > **Estado do MVP:** o app já possui ativação explícita e serviço em primeiro plano, mas ainda usa push-to-talk com `SpeechRecognizer`. openWakeWord, WebRTC VAD, Whisper Tiny e ML Kit Face Detection são as próximas integrações para a experiência contínua e o filtro de privacidade.

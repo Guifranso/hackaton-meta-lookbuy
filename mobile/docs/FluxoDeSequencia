@@ -18,7 +18,7 @@ flowchart TD
 
         OffloadToApp --> PrivacyFilter["Filtro de Privacidade Local\n(ML Kit Face Detection + blur de rostos)"]
 
-        PrivacyFilter -->|Payload Seguro: Imagem + Meta| SendToBackend[Dispara Requisição HTTP/WS]
+        PrivacyFilter -->|Payload seguro: imagem + metadados| SendToBackend[POST HTTPS /lookups]
 
         %% Interações de Voz On-Device
         LocalTTS_Fail["TTS Nativo Local\n(pausa openWakeWord/VAD)"] --> PlayAudioOut
