@@ -66,11 +66,11 @@ Podemos perder um frame desfocado. Mitigamos com nova captura por voz e instruç
 
 #### A5[2].a — A decisão *
 
-Usamos VLM/OCR no backend em vez de modelo pesado nos óculos.
+Usamos todo processamento complexo concentrado ao backend.
 
 #### A5[2].b — Por que esse lado *
 
-Preserva a bateria e o hardware limitado dos óculos, permitindo OCR e reconhecimento de embalagem mais precisos.
+A bateria limitada dos óculos e a capacidade limitada de processamento disponível no contexto do app companion
 
 #### A5[2].c — O que isso custou *
 
@@ -78,15 +78,15 @@ Há dependência de rede e latência. Sem conexão, informamos a indisponibilida
 
 #### A5[3].a — A decisão *
 
-Roteamos áudio com HFP do Android em vez de depender do DAT.
+Utilizar avaliação multi modal para identificação dos objetos de interesse
 
 #### A5[3].b — Por que esse lado *
 
-O DAT não gerencia áudio; HFP permite STT/TTS em fones e nos óculos, com fallback no próprio celular.
+Para evitar o uso de modelos VLM muito pesados, e gastos de computação muito elevados com re processamentos.
 
 #### A5[3].c — O que isso custou *
 
-Exige acessório Bluetooth compatível para a experiência nos óculos. Sem ele, usamos microfone e alto-falante do celular.
+Maior complexidade ao orquestrar as entradas e saídas em paralelo.
 
 #### A5[4].a — A decisão (opcional)
 
@@ -110,7 +110,7 @@ Reduz o tempo de implementação e valida rapidamente a interação de voz em PT
 
 #### A5[5].c — O que isso custou (opcional)
 
-O STT atual pode depender do serviço do dispositivo ou rede. Vosk ou Whisper-Tiny são alternativas offline futuras.
+O STT atual pode depender do serviço do dispositivo ou rede. Whisper-Tiny e uma alternativa para maior internacionalidade e processamento de STT offline dentro do App companion.
 
 ## Página 7 — Âncora de originalidade
 
@@ -150,8 +150,7 @@ A arquitetura prevê frame temporário, descarte após inferência e blur local 
 
 ### A7.5 — Eficiência de bateria *
 
-Usamos captura pontual, stream MEDIUM a 15 fps e processamento pesado fora dos óculos. A prévia converte no máximo dois frames por segundo.
-
+Ao utilizar os oculos apenas para capturas pontuais e feedbacks de audio, conseguimos concentrar o uso de bateria principalmente ao app companion, deixando a vida util diaria da bateria intocada
 ## Página 9 — Seção B: Diagrama de arquitetura
 
 ### B1 — Imagem do diagrama *
