@@ -126,11 +126,10 @@ HFP/SCO leva o áudio ao celular. openWakeWord, WebRTC VAD e Whisper Tiny transc
 
 ### A7.3 — Output por áudio *
 
-`TextToSpeech` nativo em PT-BR fala processamento, erro e resultado; pausa openWakeWord/VAD durante a fala. HFP/SCO é priorizado, com fallback no celular.
-
+TextToSpeech nativo em PT-BR responsável pelas saidas de audio; pausa openWakeWord/VAD durante a saida de audio. HFP/SCO é priorizado, com fallback no celular.
 ### A7.4 — Privacidade e dados *
 
-ML Kit borra rostos no celular. A imagem viaja por HTTPS e é descartada após inferência; logs técnicos sem imagem, áudio ou transcrição ficam por 7 dias.
+ML Kit borra rostos no celular. A imagem viaja por HTTPS e é descartada após inferência; logs técnicos sem imagem áudio e transcrição ficam por 7 dias.
 
 ### A7.5 — Eficiência de bateria *
 

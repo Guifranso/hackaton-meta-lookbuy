@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,9 +63,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -73,6 +76,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lookbuy.app.ai_engine.vision.ProductAnalysisResult
+import com.lookbuy.app.R
 import com.lookbuy.app.meta_wearables.audio.HfpState
 import com.lookbuy.app.presentation.viewmodels.AssistantState
 import com.lookbuy.app.ui.theme.LookBuyTheme
@@ -81,15 +85,17 @@ import com.meta.wearable.dat.core.session.DeviceSessionState
 import com.meta.wearable.dat.core.types.RegistrationState
 
 // ── Paleta LookBuy ────────────────────────────────────────────────────────────
-private val DarkBg      = Color(0xFF080C14)
-private val CardBg      = Color(0xFF111827)
-private val AccentBlue  = Color(0xFF4F8EFF)
-private val AccentPurple= Color(0xFF9B59F5)
-private val GreenOk     = Color(0xFF27AE60)
-private val OrangeWarn  = Color(0xFFE67E22)
-private val RedErr      = Color(0xFFE74C3C)
-private val MicActive   = Color(0xFFE74C3C)
-private val MicIdle     = Color(0xFF4F8EFF)
+private val CanvasBg    = Color(0xFFF8F9FE)
+private val SurfaceBg   = Color(0xFFFFFFFF)
+private val Ink         = Color(0xFF17213D)
+private val MutedInk    = Color(0xFF6A748B)
+private val AccentBlue  = Color(0xFF2E5CC4)
+private val SoftBlue    = Color(0xFFE8EEFC)
+private val GreenOk     = Color(0xFF17965A)
+private val OrangeWarn  = Color(0xFFDE8B22)
+private val RedErr      = Color(0xFFD9505D)
+private val MicActive   = Color(0xFF7358D8)
+private val MicIdle     = AccentBlue
 
 @Composable
 fun MainScreen(
@@ -116,18 +122,17 @@ fun MainScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(DarkBg, Color(0xFF0B1122)))),
+            .background(Brush.verticalGradient(listOf(CanvasBg, Color(0xFFF0F4FE)))),
     ) {
+        HeaderSection(modifier = Modifier.align(Alignment.TopCenter))
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 48.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+                .padding(top = 56.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // ── Header ────────────────────────────────────────────────────────
-            HeaderSection(sessionState = sessionState)
-
             // ── Conteúdo central (Scrollable para caber resultado) ────────────
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -139,10 +144,11 @@ fun MainScreen(
             ) {
                 cameraPreview?.let { preview ->
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(9f / 16f),
+                            .aspectRatio(1f / 1.4f),
                     ) {
                         Box {
                             Image(
@@ -164,18 +170,9 @@ fun MainScreen(
                     }
                 }
 
-                // Cards de status (esconde ao mostrar resultado pra dar espaço)
-                AnimatedVisibility(visible = lastAnalysisResult == null && !isProcessing) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        StatusCard("Registro Meta AI", registrationState.toLabel(), registrationState.toColor())
-                        // Se há erro de sessão mostra em vermelho
-                        val sessionLabel = if (sessionError != null)
-                            "Erro: ${sessionError.take(60)}"
-                        else sessionState.toLabel()
-                        StatusCard("Sessão DAT", sessionLabel, if (sessionError != null) RedErr else sessionState.toColor())
-                        StatusCard("Câmera DAT",  streamState.toLabel(), streamState.toColor())
-                        StatusCard("Áudio HFP",   hfpState.toLabel(),   hfpState.toColor())
-                    }
+                // Estados técnicos ficam discretos no vídeo; só aparecem quando há algo a corrigir.
+                AnimatedVisibility(visible = sessionError != null) {
+                    StatusCard("Conexão", "Erro: ${sessionError?.take(60)}", RedErr)
                 }
 
 
@@ -187,10 +184,10 @@ fun MainScreen(
                 ) {
                     lastCapturedPhoto?.let { bmp ->
                         Card(
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
+                                .aspectRatio(1f)
                         ) {
                             Image(
                                 bitmap = bmp.asImageBitmap(),
@@ -218,22 +215,9 @@ fun MainScreen(
                     }
                 }
 
-                // Banner "Sistema pronto"
-                AnimatedVisibility(
-                    visible = registrationState == RegistrationState.REGISTERED &&
-                              sessionState == DeviceSessionState.STARTED &&
-                              streamState == StreamState.STREAMING &&
-                              lastCapturedPhoto == null &&
-                              !isProcessing,
-                    enter = fadeIn() + scaleIn(initialScale = 0.9f),
-                    exit  = fadeOut() + scaleOut(),
-                ) {
-                    ReadyBanner()
-                }
-
                 // Área de reconhecimento de fala
                 AnimatedVisibility(
-                    visible = (isListening || partialText.isNotEmpty() || lastRecognizedText.isNotEmpty()) && lastAnalysisResult == null,
+                    visible = isListening || partialText.isNotEmpty() || lastRecognizedText.isNotEmpty(),
                     enter = fadeIn(tween(300)),
                     exit  = fadeOut(tween(300)),
                 ) {
@@ -254,43 +238,43 @@ fun MainScreen(
                 // O mic fica habilitado assim que o registro Meta AI for confirmado.
                 // A câmera só é necessária para enviar a foto; a voz sempre funciona.
                 val micEnabled = registrationState == RegistrationState.REGISTERED
-                Button(
-                    enabled = micEnabled,
-                    onClick = {
-                        if (assistantState == AssistantState.INACTIVE) onActivateAssistant()
-                        else onDeactivateAssistant()
-                    },
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(
-                        if (assistantState == AssistantState.INACTIVE) "Ativar assistente"
-                        else "Encerrar assistente",
+                    Button(
+                        enabled = micEnabled,
+                        onClick = {
+                            if (assistantState == AssistantState.INACTIVE) onActivateAssistant()
+                            else onDeactivateAssistant()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentBlue,
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFFD9DEEA),
+                            disabledContentColor = MutedInk,
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .weight(3f)
+                            .height(56.dp),
+                    ) {
+                        Text(
+                            if (assistantState == AssistantState.INACTIVE) "Ativar assistente"
+                            else "Encerrar assistente",
+                            fontSize = 13.sp,
+                        )
+                    }
+                    MicButton(
+                        isListening  = isListening,
+                        isSpeaking   = isSpeaking,
+                        enabled      = micEnabled && assistantState != AssistantState.INACTIVE,
+                        onPress      = onMicPress,
+                        onRelease    = onMicRelease,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                MicButton(
-                    isListening  = isListening,
-                    isSpeaking   = isSpeaking,
-                    enabled      = micEnabled && assistantState != AssistantState.INACTIVE,
-                    onPress      = onMicPress,
-                    onRelease    = onMicRelease,
-                )
-                Text(
-                    text = when {
-                        !micEnabled              -> "Aguardando registro Meta AI..."
-                        assistantState == AssistantState.LISTENING_FOR_WAKE_WORD ->
-                            "Assistente ativo. MVP: segure o microfone para falar."
-                        assistantState == AssistantState.INACTIVE ->
-                            "Ative o assistente para usar o microfone"
-                        isListening              -> "Solte para processar"
-                        streamState == StreamState.STREAMING -> if (hfpState == HfpState.ACTIVE)
-                            "Segure para falar (Áudio via Bluetooth)"
-                        else
-                            "Segure para falar (Áudio do Celular)"
-                        else                     -> "Segure para falar (câmera conectando...)"
-                    },
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.35f),
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
@@ -299,44 +283,21 @@ fun MainScreen(
 // ── Componentes ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeaderSection(sessionState: DeviceSessionState) {
-    val isConnected = sessionState == DeviceSessionState.STARTED
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isConnected) 1.07f else 1f,
-        animationSpec = infiniteRepeatable(
-            tween(900, easing = EaseInOutCubic), RepeatMode.Reverse
-        ),
-        label = "pulse",
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            contentAlignment = Alignment.Center,
+private fun HeaderSection(modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(AccentBlue)
+            .padding(vertical = 12.dp, horizontal = 28.dp),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.lookbuy_logo),
+            contentDescription = "LookBuy",
             modifier = Modifier
-                .size(96.dp)
-                .scale(pulseScale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(AccentBlue.copy(alpha = 0.22f), Color.Transparent)
-                    )
-                ),
-        ) {
-            Text("🕶️", fontSize = 46.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "LookBuy",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-        )
-        Text(
-            "Comparador inteligente mãos-livres",
-            fontSize = 13.sp,
-            color = Color.White.copy(alpha = 0.45f),
+                .fillMaxWidth(0.52f)
+                .height(42.dp),
+            contentScale = ContentScale.Fit,
         )
     }
 }
@@ -345,7 +306,7 @@ private fun HeaderSection(sessionState: DeviceSessionState) {
 private fun StatusCard(label: String, value: String, color: Color) {
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
+        colors = CardDefaults.cardColors(containerColor = SurfaceBg),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -355,7 +316,7 @@ private fun StatusCard(label: String, value: String, color: Color) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+            Text(label, color = MutedInk, fontSize = 11.sp)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -370,7 +331,7 @@ private fun StatusCard(label: String, value: String, color: Color) {
                     targetState = value,
                     transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
                     label = "status",
-                ) { Text(it, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+                ) { Text(it, color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
             }
         }
     }
@@ -380,7 +341,7 @@ private fun StatusCard(label: String, value: String, color: Color) {
 private fun ReadyBanner() {
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = GreenOk.copy(alpha = 0.13f)),
+        colors = CardDefaults.cardColors(containerColor = SoftBlue),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -390,10 +351,10 @@ private fun ReadyBanner() {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.CheckCircle, null, tint = GreenOk)
+            Icon(Icons.Filled.CheckCircle, null, tint = AccentBlue)
             Column {
-                Text("Sistema pronto!", color = GreenOk, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text("Segure o mic e diga o produto.", color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                Text("Pronto para encontrar preços", color = AccentBlue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Ative o assistente e segure o mic para perguntar.", color = MutedInk, fontSize = 11.sp)
             }
         }
     }
@@ -403,7 +364,7 @@ private fun ReadyBanner() {
 private fun ProcessingIndicator() {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = AccentPurple.copy(alpha = 0.15f)),
+        colors = CardDefaults.cardColors(containerColor = SurfaceBg),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -414,12 +375,12 @@ private fun ProcessingIndicator() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             CircularProgressIndicator(
-                color = AccentPurple,
+                color = AccentBlue,
                 modifier = Modifier.size(24.dp),
                 strokeWidth = 2.5.dp
             )
             Spacer(Modifier.width(12.dp))
-            Text("A IA está analisando a imagem...", color = AccentPurple, fontWeight = FontWeight.Medium)
+            Text("Analisando o produto e pesquisando preços...", color = Ink, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -428,7 +389,7 @@ private fun ProcessingIndicator() {
 private fun ResultCard(result: ProductAnalysisResult) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
+        colors = CardDefaults.cardColors(containerColor = SurfaceBg),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -441,8 +402,8 @@ private fun ResultCard(result: ProductAnalysisResult) {
                 Icon(Icons.Filled.Search, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(result.productName, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Marca: ${result.brand}", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                    Text(result.productName, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Marca: ${result.brand}", color = MutedInk, fontSize = 11.sp)
                 }
             }
 
@@ -450,7 +411,7 @@ private fun ResultCard(result: ProductAnalysisResult) {
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(GreenOk.copy(alpha = 0.15f))
+                    .background(SoftBlue)
                     .padding(16.dp)
             ) {
                 Row(
@@ -459,11 +420,11 @@ private fun ResultCard(result: ProductAnalysisResult) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.LocalOffer, contentDescription = null, tint = GreenOk, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.LocalOffer, contentDescription = null, tint = AccentBlue, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Preço Encontrado", color = GreenOk, fontWeight = FontWeight.Medium)
+                        Text("Preço estimado", color = AccentBlue, fontWeight = FontWeight.Medium)
                     }
-                    Text(result.formattedPrice, color = GreenOk, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text(result.formattedPrice, color = AccentBlue, fontSize = 16.sp, fontWeight = FontWeight.Black)
                 }
             }
         }
@@ -480,12 +441,12 @@ private fun SpeechBubble(
     val displayText = when {
         isListening && partialText.isNotEmpty() -> partialText
         isListening                             -> "Ouvindo..."
-        isSpeaking                              -> "🔊 $lastText"
+        isSpeaking                              -> lastText
         else                                    -> lastText
     }
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = AccentBlue.copy(alpha = 0.12f)),
+        colors = CardDefaults.cardColors(containerColor = SoftBlue),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -498,12 +459,12 @@ private fun SpeechBubble(
             Icon(
                 imageVector = if (isSpeaking) Icons.Filled.VolumeUp else Icons.Filled.Mic,
                 contentDescription = null,
-                tint = if (isSpeaking) AccentPurple else AccentBlue,
+                tint = AccentBlue,
             )
             Text(
                 text = displayText,
-                color = Color.White.copy(alpha = if (isListening && partialText.isEmpty()) 0.45f else 0.9f),
-                fontSize = 14.sp,
+                color = Ink.copy(alpha = if (isListening && partialText.isEmpty()) 0.55f else 0.9f),
+                fontSize = 12.sp,
                 fontStyle = if (isListening && partialText.isEmpty()) FontStyle.Italic else FontStyle.Normal,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -519,24 +480,17 @@ private fun MicButton(
     enabled: Boolean,
     onPress: () -> Unit,
     onRelease: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Pulso infinito quando está escutando
-    val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
-    val ringAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f, targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Restart),
-        label = "ring_alpha",
-    )
-
-    // Escala: comprime ao pressionar (0.88), bounce ao soltar, normaliza
+    // Ao pressionar, o botão cresce levemente para dar retorno visual imediato.
     val pressScale by animateFloatAsState(
         targetValue = when {
-            isListening && isPressed -> 0.88f
-            isListening              -> 1.05f
-            isPressed                -> 0.88f
+            isListening && isPressed -> 1.035f
+            isListening              -> 1.02f
+            isPressed                -> 1.03f
             else                     -> 1f
         },
         animationSpec = spring(
@@ -546,45 +500,23 @@ private fun MicButton(
         label = "press_scale",
     )
 
-    // Anel externo expande ao pressionar
-    val ringScale by animateFloatAsState(
-        targetValue = if (isPressed || isListening) 1.35f else 1f,
-        animationSpec = tween(200),
-        label = "ring_scale",
-    )
-
-
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(120.dp),
+        modifier = modifier
+            .height(56.dp),
     ) {
-        // Anel externo pulsante (visível ao pressionar ou ao escutar)
-        if (isListening || isPressed) {
-            Box(
-                Modifier
-                    .size(120.dp)
-                    .scale(ringScale)
-                    .clip(CircleShape)
-                    .background(
-                        if (isListening) MicActive.copy(alpha = ringAlpha * 0.4f)
-                        else MicIdle.copy(alpha = 0.25f)
-                    )
-            )
-        }
-
-        // Botão principal
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(80.dp)
+                .fillMaxSize()
                 .scale(pressScale)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(18.dp))
                 .background(
-                    Brush.radialGradient(
-                        if (!enabled) listOf(Color.Gray, Color.DarkGray)
-                        else if (isListening) listOf(MicActive, MicActive.copy(alpha = 0.6f))
-                        else listOf(MicIdle, AccentPurple)
-                    )
+                    when {
+                        !enabled -> Color(0xFFD9DEEA)
+                        isPressed || isListening -> Color(0xFF6389E5)
+                        else -> AccentBlue
+                    }
                 )
                 .pointerInput(enabled) {
                     detectTapGestures(
@@ -601,8 +533,8 @@ private fun MicButton(
             Icon(
                 imageVector = if (isListening) Icons.Filled.MicOff else Icons.Filled.Mic,
                 contentDescription = if (isListening) "Parar escuta" else "Iniciar escuta",
-                tint = if (enabled) Color.White else Color.White.copy(alpha = 0.4f),
-                modifier = Modifier.size(32.dp),
+                tint = if (enabled) Color.White else MutedInk,
+                modifier = Modifier.size(22.dp),
             )
         }
     }

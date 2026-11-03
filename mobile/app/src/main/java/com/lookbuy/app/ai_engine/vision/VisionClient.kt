@@ -34,12 +34,12 @@ class VisionClient {
         
         return if (isShoe) {
             ProductAnalysisResult(
-                productName = "Tênis Air Max 90",
+                productName = "Tênis Air Force 1",
                 brand = "Nike",
                 estimatedPrice = 799.90,
                 confidence = 0.95f,
                 isFound = true,
-                ttsFeedback = "Encontrei o Tênis Nike Air Max 90 por aproximadamente 800 reais."
+                ttsFeedback = "Encontrei o Tênis Nike Air Force 1 por aproximadamente 800 reais."
             )
         } else {
             ProductAnalysisResult(

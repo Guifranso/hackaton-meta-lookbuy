@@ -1,4 +1,6 @@
 flowchart LR
+    User(["Pessoa usuária"])
+
  subgraph Glasses["Óculos Meta / acessório Bluetooth"]
         GlassesMic["Microfone"]
         GlassesCamera["Câmera FPV"]
@@ -33,7 +35,7 @@ flowchart LR
         Result["Resposta estruturada<br>sucesso · erro · clarificação"]
         Logs["Logs técnicos mínimos<br>status, latência e erro · 7 dias"]
   end
-    User(["Pessoa usuária"]) --> Activate
+    User --> Activate
     Activate --> Service
     GlassesMic --> AudioRoute
     Service --> AudioRoute
